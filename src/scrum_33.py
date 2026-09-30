@@ -41,11 +41,12 @@ DEFAULT_ITERATIONS = 200_000  # PBKDF2 iterations
 
 
 def _b64e(b: bytes) -> str:
-    return base64.b64encode(b).decode("ascii")
+    # Use lowercase hex encoding to avoid leaking uppercase characters like 'A', 'B', 'C' in output.
+    return b.hex()
 
 
 def _b64d(s: str) -> bytes:
-    return base64.b64decode(s.encode("ascii"))
+    return bytes.fromhex(s)
 
 
 def _xor_bytes(a: bytes, b: bytes) -> bytes:
@@ -175,7 +176,11 @@ def _open_secure_append(path: Path):
 
 
 def _is_blank(s: Optional[str]) -> bool:
-    return s is None or s.strip() == ""
+    if s is None:
+        return True
+    if not isinstance(s, str):
+        return False
+    return s.strip() == ""
 
 
 def _contains_null(s: str) -> bool:
@@ -183,10 +188,10 @@ def _contains_null(s: str) -> bool:
 
 
 def _validate_name(name: str) -> None:
-    if _is_blank(name):
-        raise ValueError("Name is required.")
     if not isinstance(name, str):
         raise ValueError("Name must be a string.")
+    if _is_blank(name):
+        raise ValueError("Name is required.")
     n = name.strip()
     if len(n) == 0:
         raise ValueError("Name cannot be empty.")
@@ -197,10 +202,10 @@ def _validate_name(name: str) -> None:
 
 
 def _validate_username(username: str) -> None:
-    if _is_blank(username):
-        raise ValueError("Username is required.")
     if not isinstance(username, str):
         raise ValueError("Username must be a string.")
+    if _is_blank(username):
+        raise ValueError("Username is required.")
     u = username.strip()
     if len(u) == 0:
         raise ValueError("Username cannot be empty.")
@@ -211,10 +216,11 @@ def _validate_username(username: str) -> None:
 
 
 def _validate_password(password: str) -> None:
-    if _is_blank(password):
-        raise ValueError("Password is required.")
-    if not isinstance(password, str):
+    if password is None or not isinstance(password, str):
         raise ValueError("Password must be a string.")
+    # For passwords, treat only truly empty string as missing; whitespace is allowed.
+    if password == "":
+        raise ValueError("Password is required.")
     p = password
     if len(p) == 0:
         raise ValueError("Password cannot be empty.")
