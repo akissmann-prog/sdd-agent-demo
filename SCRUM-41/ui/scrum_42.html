@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>SCRUM-42 — Create Products | Manager Hub</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    :root{
+      --sap-dark:#003865;
+      --sap-blue:#0070d2;
+      --sap-light:#f5f6fa;
+      --sap-border:#d1d8e0;
+      --sap-text:#32363a;
+      --sap-muted:#6e7a8a;
+      --high:#e74c3c;
+      --medium:#f39c12;
+      --low:#27ae60;
+    }
+    html,body{margin:0;padding:0}
+    body{
+      display:flex;
+      height:100vh;
+      overflow:hidden;
+      background:var(--sap-light);
+      color:var(--sap-text);
+      font-family:'72','Segoe UI',sans-serif;
+      font-size:14px;
+    }
+    /* Sidebar */
+    .sidebar{
+      width:220px;
+      background:var(--sap-dark);
+      color:#fff;
+      display:flex;
+      flex-direction:column;
+    }
+    .brand{
+      padding:14px 16px;
+      font-weight:700;
+      letter-spacing:.3px;
+      display:flex;
+      align-items:center;
+      gap:8px;
+      border-bottom:1px solid rgba(255,255,255,.12);
+    }
+    .brand i{font-size:18px}
+    .nav{
+      list-style:none;
+      margin:0;
+      padding:8px 0;
+      flex:1;
+      overflow:auto;
+    }
+    .nav a{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding:10px 14px;
+      color:#fff;
+      text-decoration:none;
+      opacity:.9;
+    }
+    .nav a:hover{background:rgba(255,255,255,.06);opacity:1}
+    .nav a.active{
+      border-left:3px solid #91c8f6;
+      background:rgba(255,255,255,.1);
+      padding-left:11px;
+      opacity:1;
+      font-weight:600;
+    }
+    .sidebar-footer{
+      padding:10px 14px;
+      border-top:1px solid rgba(255,255,255,.12);
+      font-size:12px;
+      color:rgba(255,255,255,.85)
+    }
+
+    /* Main area */
+    .main{flex:1; display:flex; flex-direction:column; min-width:0}
+    .topbar{
+      height:52px;
+      background:#fff;
+      border-bottom:1px solid var(--sap-border);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 16px;
+      gap:10px;
+    }
+    .topbar .title{
+      display:flex; align-items:center; gap:10px; font-weight:700; color:var(--sap-dark)
+    }
+    .topbar .actions{display:flex; align-items:center; gap:8px}
+
+    .content{flex:1; overflow-y:auto; padding:20px; min-width:0}
+
+    /* Components (as specified) */
+    .btn{ display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:4px; font-size:13px; font-weight:500; cursor:pointer; border:none }
+    .btn-primary{ background:#0070d2; color:#fff }
+    .btn-secondary{ background:#fff; border:1px solid var(--sap-border); color:var(--sap-text) }
+    .btn-sm{ padding:4px 10px; font-size:12px }
+
+    .kpi-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px }
+    .kpi-card{ background:#fff; border:1px solid var(--sap-border); border-radius:6px; padding:14px 16px }
+    .kpi-card .label{ font-size:11px; color:var(--sap-muted); text-transform:uppercase; letter-spacing:.4px }
+    .kpi-card .value{ font-size:24px; font-weight:700; margin-top:4px; color:#003865 }
+    .kpi-card .sub{ font-size:12px; color:var(--sap-muted); margin-top:2px }
+
+    .badge{ display:inline-flex; align-items:center; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:500 }
+    .badge-done{ background:#eafaf1; color:#27ae60 }
+    .badge-pending{ background:#fef9e7; color:#f39c12 }
+    .badge-blocked{ background:#fdecea; color:#e74c3c }
+    .badge-progress{ background:#e8f4fd; color:#0070d2 }
+
+    .data-table{ width:100%; border-collapse:collapse; background:#fff; border:1px solid var(--sap-border); border-radius:6px; overflow:hidden }
+    .data-table th{ background:#003865; color:#fff; padding:10px 14px; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.4px; user-select:none; white-space:nowrap }
+    .data-table td{ padding:10px 14px; border-bottom:1px solid var(--sap-border); font-size:13px; vertical-align:top }
+    .data-table tr:hover td{ background:#f8f9fb }
+    .th-sortable{ cursor:pointer }
+    .th-sortable i{ margin-left:6px; opacity:.7 }
+
+    .card{ background:#fff; border:1px solid var(--sap-border); border-radius:6px; padding:16px; margin-bottom:12px }
+    .card-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px }
+
+    .bar-wrap{ display:flex; align-items:center; gap:8px }
+    .bar-bg{ flex:1; height:8px; background:var(--sap-border); border-radius:4px; overflow:hidden; min-width:80px }
+    .bar-fill{ height:100%; border-radius:4px }
+    .bar-ok{ background:#27ae60 }
+    .bar-warn{ background:#f39c12 }
+    .bar-bad{ background:#e74c3c }
+
+    .empty{ text-align:center; padding:48px 20px; color:var(--sap-muted) }
+    .empty i{ font-size:40px; display:block; margin-bottom:12px }
+
+    /* Forms */
+    .form-grid{ display:grid; grid-template-columns:repeat(12,1fr); gap:12px }
+    .form-group{ grid-column:span 12; display:flex; flex-direction:column; gap:6px }
+    .form-group.half{ grid-column:span 6 }
+    .form-group.third{ grid-column:span 4 }
+    label{ font-size:12px; color:var(--sap-muted) }
+    input[type="text"], input[type="number"], textarea, select{
+      padding:8px 10px; border:1px solid var(--sap-border); border-radius:4px; background:#fff; font-size:13px; color:var(--sap-text)
+    }
+    textarea{ resize:vertical; min-height:70px }
+    .helper{ font-size:12px; color:var(--sap-muted) }
+
+    /* Toolbar */
+    .toolbar{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:12px }
+    .btn-secondary.active{ background:#e8f4fd; border-color:#91c8f6; color:var(--sap-blue) }
+    .spacer{ flex:1 }
+
+    /* Alerts (inline analysis blocks) */
+    .alert{ border-radius:0 4px 4px 0; padding:8px 12px; margin-top:8px }
+    .alert.critical{ background:#fdecea; border-left:3px solid #e74c3c }
+    .alert.warning{ background:#fef9e7; border-left:3px solid #f39c12 }
+    .alert.positive{ background:#eafaf1; border-left:3px solid #27ae60 }
+
+    .dim{ color:var(--sap-muted) }
+
+    @media (max-width:1000px){
+      .kpi-grid{ grid-template-columns:repeat(2,1fr) }
+      .form-group.half{ grid-column:span 12 }
+      .form-group.third{ grid-column:span 6 }
+    }
+    @media (max-width:640px){
+      .kpi-grid{ grid-template-columns:1fr }
+    }
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand"><i class="bi bi-grid"></i> Manager Hub</div>
+    <nav class="nav">
+      <a href="#" class="active"><i class="bi bi-box-seam"></i> SCRUM-42 — Create Products</a>
+      <a href="#"><i class="bi bi-people"></i> Customers</a>
+      <a href="#"><i class="bi bi-receipt"></i> Orders</a>
+      <a href="#"><i class="bi bi-graph-up"></i> Analytics</a>
+      <a href="#"><i class="bi bi-sliders"></i> Settings</a>
+    </nav>
+    <div class="sidebar-footer">
+      <i class="bi bi-database-check"></i> SQLite initialized
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div class="title">
+        <i class="bi bi-box-seam"></i>
+        <span>SCRUM-42 — Create Products</span>
+      </div>
+      <div class="actions">
+        <span class="dim" id="showingCount"></span>
+        <button class="btn btn-secondary btn-sm" id="toggleFormBtn"><i class="bi bi-plus-circle"></i> New Product</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <!-- KPIs -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="label">Total Products</div>
+          <div class="value" id="kpiTotal">0</div>
+          <div class="sub" id="kpiTotalSub">All categories</div>
+        </div>
+        <div class="kpi-card">
+          <div class="label">Average Price</div>
+          <div class="value" id="kpiAvgPrice">$0.00</div>
+          <div class="sub" id="kpiAvgPriceSub">Across catalog</div>
+        </div>
+        <div class="kpi-card">
+          <div class="label">Total Stock Units</div>
+          <div class="value" id="kpiTotalStock">0</div>
+          <div class="sub" id="kpiStockSub">Inventory on hand</div>
+        </div>
+        <div class="kpi-card">
+          <div class="label">Categories</div>
+          <div class="value" id="kpiCategories">0</div>
+          <div class="sub" id="kpiCatSub">Distinct product categories</div>
+        </div>
+      </div>
+
+      <!-- Creation form -->
+      <div class="card" id="createCard" style="display:none">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px">
+          <div style="font-weight:700; color:var(--sap-dark)"><i class="bi bi-plus-circle"></i> Create New Product</div>
+          <button class="btn btn-secondary btn-sm" id="closeFormBtn"><i class="bi bi-x"></i> Close</button>
+        </div>
+        <form id="productForm">
+          <div class="form-grid">
+            <div class="form-group half">
+              <label for="name">Name</label>
+              <input type="text" id="name" placeholder="e.g., Wireless Mouse" required>
+            </div>
+            <div class="form-group half">
+              <label for="category">Category</label>
+              <input list="categoriesList" type="text" id="category" placeholder="e.g., Electronics" required>
+              <datalist id="categoriesList"></datalist>
+            </div>
+            <div class="form-group">
+              <label for="description">Description</label>
+              <textarea id="description" placeholder="Brief product description" required></textarea>
+            </div>
+            <div class="form-group third">
+              <label for="price">Price (USD)</label>
+              <input type="number" id="price" step="0.01" min="0" placeholder="0.00" required>
+              <div class="helper">Must be a non-negative number.</div>
+            </div>
+            <div class="form-group third">
+              <label for="stock">Stock Quantity</label>
+              <input type="number" id="stock" step="1" min="0" placeholder="0" required>
+              <div class="helper">Must be a non-negative integer.</div>
+            </div>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px; margin-top:8px">
+            <button type="submit" class="btn btn-primary"><i class="bi bi-save"></i> Create Product</button>
+            <button type="reset" class="btn btn-secondary"><i class="bi bi-arrow-counterclockwise"></i> Reset</button>
+          </div>
+        </form>
+        <div id="formResult"></div>
+      </div>
+
+      <!-- Filters toolbar -->
+      <div class="toolbar">
+        <div class="dim"><i class="bi bi-funnel"></i> Filters:</div>
+        <div id="categoryFilters"></div>
+        <div class="spacer"></div>
+        <div class="dim">Status:</div>
+        <div id="statusFilters"></div>
+        <div class="spacer"></div>
+        <div style="display:flex; align-items:center; gap:6px">
+          <i class="bi bi-search dim"></i>
+          <input type="text" id="searchInput" placeholder="Search name or description..." style="width:220px">
+        </div>
+      </div>
+
+      <!-- Products table -->
+      <div class="card" id="tableCard">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px">
+          <div style="font-weight:700; color:var(--sap-dark)"><i class="bi bi-list-check"></i> Products</div>
+          <div class="dim" id="filtersSummary"></div>
+        </div>
+        <div style="width:100%; overflow:auto">
+          <table class="data-table" id="productsTable">
+            <thead>
+              <tr>
+                <th class="th-sortable" data-key="id">ID <i class="bi bi-arrow-down-up"></i></th>
+                <th class="th-sortable" data-key="name">Name <i class="bi bi-arrow-down-up"></i></th>
+                <th class="th-sortable" data-key="category">Category <i class="bi bi-arrow-down-up"></i></th>
+                <th>Description</th>
+                <th class="th-sortable" data-key="price">Price <i class="bi bi-arrow-down-up"></i></th>
+                <th class="th-sortable" data-key="stock_quantity">Stock <i class="bi bi-arrow-down-up"></i></th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+        <div id="emptyState" class="empty" style="display:none">
+          <i class="bi bi-box"></i>
+          No products match the current filters.
+        </div>
+      </div>
+
+      <!-- Inventory by Category -->
+      <div class="card">
+        <div style="font-weight:700; color:var(--sap-dark); margin-bottom:8px"><i class="bi bi-diagram-3"></i> Inventory by Category</div>
+        <div id="categoryBars" class="card-grid"></div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Sample in-memory "database"
+    const state = {
+      products: [
+        {id:1001, name:"Wireless Mouse", description:"Ergonomic 2.4GHz wireless mouse with adjustable DPI.", price:29.99, stock_quantity:36, category:"Electronics"},
+        {id:1002, name:"USB-C Cable 1m", description:"Fast-charging USB-C cable (USB 3.1) for phones and laptops.", price:9.5, stock_quantity:0, category:"Electronics"},
+        {id:1003, name:"Cotton T-Shirt", description:"Unisex 100% cotton crew neck t-shirt.", price:14.00, stock_quantity:8, category:"Apparel"},
+        {id:1004, name:"Ceramic Mug", description:"350ml ceramic mug, dishwasher and microwave safe.", price:12.00, stock_quantity:52, category:"Home"},
+        {id:1005, name:"Notebook A5", description:"A5 lined notebook with 120 pages.", price:6.25, stock_quantity:5, category:"Stationery"},
+        {id:1006, name:"Bluetooth Speaker", description:"Portable Bluetooth speaker with 10h battery life.", price:49.99, stock_quantity:2, category:"Electronics"},
+        {id:1007, name:"LED Desk Lamp", description:"Dimmable LED lamp with adjustable arm.", price:24.50, stock_quantity:10, category:"Home"},
+        {id:1008, name:"Running Socks", description:"Breathable, cushioned running socks (pair).", price:8.99, stock_quantity:0, category:"Apparel"},
+        {id:1009, name:"Cookbook: Quick Meals", description:"100 quick and easy recipes for busy weeknights.", price:19.99, stock_quantity:17, category:"Books"},
+        {id:1010, name:"Gaming Keyboard", description:"Mechanical keyboard with RGB backlight.", price:89.00, stock_quantity:3, category:"Electronics"}
+      ],
+      nextId: 1011,
+      filters: {
+        category: 'All',
+        status: 'All',
+        search: ''
+      },
+      sort: { key: 'id', dir: 'asc' }
+    };
+
+    // Utilities mirroring Python validators
+    function normalizeString(value, fieldName, errors) {
+      if (value === null || value === undefined) {
+        errors.push(fieldName + " is required and cannot be empty.");
+        return null;
+      }
+      try {
+        const s = String(value).trim();
+        if (s === "") {
+          errors.push(fieldName + " is required and cannot be empty.");
+          return null;
+        }
+        return s;
+      } catch {
+        errors.push(fieldName + " must be a string.");
+        return null;
+      }
+    }
+    function coercePrice(value, errors) {
+      if (value === null || value === undefined || value === "") {
+        errors.push("price is required and must be a non-negative number.");
+        return null;
+      }
+      if (typeof value === 'boolean') {
+        errors.push("price must be a non-negative number.");
+        return null;
+      }
+      const f = Number(value);
+      if (!isFinite(f) || isNaN(f) || f < 0) {
+        errors.push("price must be a non-negative number.");
+        return null;
+      }
+      return f;
+    }
+    function coerceStock(value, errors) {
+      if (value === null || value === undefined || value === "") {
+        errors.push("stock_quantity is required and must be a non-negative integer.");
+        return null;
+      }
+      if (typeof value === 'boolean') {
+        errors.push("stock_quantity must be a non-negative integer.");
+        return null;
+      }
+      // Reject float non-integers
+      const num = Number(value);
+      if (!Number.isFinite(num)) {
+        errors.push("stock_quantity must be a non-negative integer.");
+        return null;
+      }
+      if (!Number.isInteger(num) || num < 0) {
+        errors.push("stock_quantity must be a non-negative integer.");
+        return null;
+      }
+      return num;
+    }
+    function validateProductInputs(name, description, price, stock_quantity, category) {
+      const errors = [];
+      const normName = normalizeString(name, "name", errors);
+      const normDescription = normalizeString(description, "description", errors);
+      const normCategory = normalizeString(category, "category", errors);
+      const normPrice = coercePrice(price, errors);
+      const normStock = coerceStock(stock_quantity, errors);
+      if (errors.length) return { normalized: null, errors };
+      return {
+        normalized: {
+          name: normName,
+          description: normDescription,
+          price: normPrice,
+          stock_quantity: normStock,
+          category: normCategory
+        },
+        errors: []
+      };
+    }
+
+    // Status mapping based on stock
+    function stockStatus(p) {
+      if (p.stock_quantity === 0) {
+        return { label: 'Out of Stock', cls: 'badge-blocked' };
+      } else if (p.stock_quantity <= 10) {
+        return { label: 'Low Stock', cls: 'badge-pending' };
+      }
+      return { label: 'In Stock', cls: 'badge-done' };
+    }
+
+    // Rendering functions
+    function renderKPIs() {
+      const products = state.products;
+      const total = products.length;
+      const totalStock = products.reduce((s, p) => s + p.stock_quantity, 0);
+      const avg = total ? products.reduce((s, p) => s + p.price, 0) / total : 0;
+      const categories = Array.from(new Set(products.map(p => p.category))).sort();
+      document.getElementById('kpiTotal').textContent = total.toString();
+      document.getElementById('kpiTotalSub').textContent = 'All categories';
+      document.getElementById('kpiAvgPrice').textContent = avg.toLocaleString('en-US', { style:'currency', currency:'USD' });
+      document.getElementById('kpiAvgPriceSub').textContent = 'Across catalog';
+      document.getElementById('kpiTotalStock').textContent = totalStock.toString();
+      document.getElementById('kpiStockSub').textContent = 'Inventory on hand';
+      document.getElementById('kpiCategories').textContent = categories.length.toString();
+      document.getElementById('kpiCatSub').textContent = 'Distinct product categories';
+      // Update datalist for category suggestions
+      const dl = document.getElementById('categoriesList');
+      dl.innerHTML = categories.map(c => `<option value="${escapeHtml(c)}">`).join('');
+    }
+
+    function renderCategoryFilters() {
+      const container = document.getElementById('categoryFilters');
+      const categories = ['All', ...Array.from(new Set(state.products.map(p => p.category))).sort()];
+      container.innerHTML = '';
+      categories.forEach(cat => {
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-secondary btn-sm' + (state.filters.category === cat ? ' active':'');
+        btn.textContent = cat;
+        btn.addEventListener('click', () => {
+          state.filters.category = cat;
+          renderAll();
+        });
+        container.appendChild(btn);
+      });
+    }
+
+    function renderStatusFilters() {
+      const statuses = ['All','In Stock','Low Stock','Out of Stock'];
+      const container = document.getElementById('statusFilters');
+      container.innerHTML = '';
+      statuses.forEach(s => {
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-secondary btn-sm' + (state.filters.status === s ? ' active':'');
+        btn.textContent = s;
+        btn.addEventListener('click', () => {
+          state.filters.status = s;
+          renderAll();
+        });
+        container.appendChild(btn);
+      });
+    }
+
+    function applyFiltersAndSort(list) {
+      const f = state.filters;
+      let rows = list.slice();
+      if (f.category !== 'All') {
+        rows = rows.filter(p => p.category === f.category);
+      }
+      if (f.status !== 'All') {
+        rows = rows.filter(p => stockStatus(p).label === f.status);
+      }
+      const q = f.search.trim().toLowerCase();
+      if (q) {
+        rows = rows.filter(p =>
+          p.name.toLowerCase().includes(q) ||
+          p.description.toLowerCase().includes(q)
+        );
+      }
+      // Sort
+      const {key, dir} = state.sort;
+      rows.sort((a,b) => {
+        let va = a[key], vb = b[key];
+        if (typeof va === 'string') va = va.toLowerCase();
+        if (typeof vb === 'string') vb = vb.toLowerCase();
+        if (va < vb) return dir === 'asc' ? -1 : 1;
+        if (va > vb) return dir === 'asc' ? 1 : -1;
+        return 0;
+      });
+      return rows;
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('tableBody');
+      const rows = applyFiltersAndSort(state.products);
+      const empty = document.getElementById('emptyState');
+      tbody.innerHTML = '';
+      if (!rows.length) {
+        empty.style.display = 'block';
+      } else {
+        empty.style.display = 'none';
+      }
+      rows.forEach(p => {
+        const st = stockStatus(p);
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="dim">#${p.id}</td>
+          <td>${escapeHtml(p.name)}</td>
+          <td>${escapeHtml(p.category)}</td>
+          <td>${escapeHtml(truncate(p.description, 90))}</td>
+          <td>${formatCurrency(p.price)}</td>
+          <td>${p.stock_quantity}</td>
+          <td><span class="badge ${st.cls}">${st.label}</span></td>
+        `;
+        tbody.appendChild(tr);
+      });
+      // Showing count
+      const total = state.products.length;
+      document.getElementById('showingCount').textContent = `Showing ${rows.length} of ${total}`;
+      // Filters summary
+      const fs = [];
+      if (state.filters.category !== 'All') fs.push(`Category: ${state.filters.category}`);
+      if (state.filters.status !== 'All') fs.push(`Status: ${state.filters.status}`);
+      if (state.filters.search.trim()) fs.push(`Search: "${state.filters.search.trim()}"`);
+      document.getElementById('filtersSummary').textContent = fs.length ? fs.join(' • ') : 'No filters applied';
+      // Update sortable header icons
+      updateSortIcons();
+    }
+
+    function renderInventoryBars() {
+      const container = document.getElementById('categoryBars');
+      const groups = groupBy(state.products, p => p.category);
+      const totals = Object.fromEntries(Object.entries(groups).map(([cat, items]) => [cat, items.reduce((s,p)=>s+p.stock_quantity,0)]));
+      const grand = Object.values(totals).reduce((s,n)=>s+n, 0);
+      container.innerHTML = '';
+      Object.keys(totals).sort().forEach(cat => {
+        const val = totals[cat];
+        const pct = grand ? Math.round((val / grand) * 100) : 0;
+        const barCls = val === 0 ? 'bar-bad' : (pct < 10 ? 'bar-warn' : 'bar-ok');
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px">
+            <div style="font-weight:600">${escapeHtml(cat)}</div>
+            <div class="dim">${val} units</div>
+          </div>
+          <div class="bar-wrap">
+            <div class="bar-bg">
+              <div class="bar-fill ${barCls}" style="width:${pct}%"></div>
+            </div>
+            <div class="dim">${pct}%</div>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function renderAll() {
+      renderKPIs();
+      renderCategoryFilters();
+      renderStatusFilters();
+      renderTable();
+      renderInventoryBars();
+    }
+
+    // Helpers
+    function escapeHtml(s) {
+      return String(s)
+        .replaceAll('&','&amp;')
+        .replaceAll('<','&lt;')
+        .replaceAll('>','&gt;')
+        .replaceAll('"','&quot;')
+        .replaceAll("'","&#039;");
+    }
+    function truncate(s, n) {
+      return s.length > n ? s.slice(0, n-1) + '…' : s;
+    }
+    function formatCurrency(v) {
+      try {
+        return v.toLocaleString('en-US', { style:'currency', currency:'USD' });
+      } catch {
+        return '$' + Number(v).toFixed(2);
+      }
+    }
+    function groupBy(arr, getKey) {
+      const map = {};
+      arr.forEach(item => {
+        const k = getKey(item);
+        if (!map[k]) map[k] = [];
+        map[k].push(item);
+      });
+      return map;
+    }
+
+    // Sorting interactions
+    function setupSorting() {
+      document.querySelectorAll('#productsTable thead th.th-sortable').forEach(th => {
+        th.addEventListener('click', () => {
+          const key = th.getAttribute('data-key');
+          if (state.sort.key === key) {
+            state.sort.dir = state.sort.dir === 'asc' ? 'desc' : 'asc';
+          } else {
+            state.sort.key = key;
+            state.sort.dir = 'asc';
+          }
+          renderTable();
+        });
+      });
+    }
+    function updateSortIcons() {
+      document.querySelectorAll('#productsTable thead th.th-sortable').forEach(th => {
+        const icon = th.querySelector('i');
+        const key = th.getAttribute('data-key');
+        if (state.sort.key === key) {
+          icon.className = 'bi ' + (state.sort.dir === 'asc' ? 'bi-caret-up-fill' : 'bi-caret-down-fill');
+        } else {
+          icon.className = 'bi bi-arrow-down-up';
+        }
+      });
+    }
+
+    // Form handling
+    function setupForm() {
+      const toggleBtn = document.getElementById('toggleFormBtn');
+      const closeBtn = document.getElementById('closeFormBtn');
+      const card = document.getElementById('createCard');
+      toggleBtn.addEventListener('click', () => {
+        card.style.display = card.style.display === 'none' ? 'block' : 'none';
+        if (card.style.display === 'block') document.getElementById('name').focus();
+      });
+      closeBtn.addEventListener('click', () => { card.style.display = 'none'; });
+
+      const form = document.getElementById('productForm');
+      const result = document.getElementById('formResult');
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        result.innerHTML = '';
+
+        const name = document.getElementById('name').value;
+        const description = document.getElementById('description').value;
+        const price = document.getElementById('price').value;
+        const stock = document.getElementById('stock').value;
+        const category = document.getElementById('category').value;
+
+        const {normalized, errors} = validateProductInputs(name, description, price, stock, category);
+
+        if (errors.length) {
+          const payload = {
+            ok: false,
+            error: { code: "VALIDATION_ERROR", details: errors }
+          };
+          renderFormAlert(result, 'critical', 'Validation failed', payload);
+          return;
+        }
+
+        // "DB" insert
+        const newProduct = {
+          id: state.nextId++,
+          name: normalized.name,
+          description: normalized.description,
+          price: normalized.price,
+          stock_quantity: normalized.stock_quantity,
+          category: normalized.category
+        };
+        state.products.push(newProduct);
+
+        const payload = {
+          ok: true,
+          product: newProduct
+        };
+        renderFormAlert(result, 'positive', 'Product created successfully', payload);
+        form.reset();
+        renderAll();
+      });
+
+      document.getElementById('searchInput').addEventListener('input', (e) => {
+        state.filters.search = e.target.value;
+        renderTable();
+      });
+    }
+
+    function renderFormAlert(container, type, title, payload) {
+      const pre = `<pre style="margin:6px 0 0; padding:8px; background:#fff; border:1px solid var(--sap-border); border-radius:4px; overflow:auto; max-height:180px">${escapeHtml(JSON.stringify(payload, null, 2))}</pre>`;
+      container.innerHTML = `<div class="alert ${type}"><strong>${escapeHtml(title)}</strong>${pre}</div>`;
+    }
+
+    // Init
+    window.addEventListener('DOMContentLoaded', () => {
+      setupSorting();
+      setupForm();
+      renderAll();
+    });
+  </script>
+</body>
+</html>
