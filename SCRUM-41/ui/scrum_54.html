@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>SCRUM-54 — Delete Products Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    :root{
+      --sap-dark:#003865;
+      --sap-blue:#0070d2;
+      --sap-light:#f5f6fa;
+      --sap-border:#d1d8e0;
+      --sap-text:#32363a;
+      --sap-muted:#6e7a8a;
+      --high:#e74c3c;
+      --medium:#f39c12;
+      --low:#27ae60;
+    }
+    *{box-sizing:border-box}
+    body{display:flex;height:100vh;overflow:hidden;background:var(--sap-light);margin:0;font-family:'72','Segoe UI',sans-serif;color:var(--sap-text);font-size:14px}
+    a{text-decoration:none;color:inherit}
+    .sidebar{width:220px;background:var(--sap-dark);color:#fff;display:flex;flex-direction:column}
+    .sidebar .logo{padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.15);font-weight:600}
+    .sidebar nav{padding:8px 0;flex:1;overflow-y:auto}
+    .sidebar nav a{display:block;padding:10px 16px;color:#fff;opacity:.95}
+    .sidebar nav a:hover{background:rgba(255,255,255,.08)}
+    .sidebar nav a.active{border-left:3px solid #91c8f6;background:rgba(255,255,255,.1);padding-left:13px}
+    .topbar{height:52px;background:#fff;border-bottom:1px solid var(--sap-border);display:flex;align-items:center;justify-content:space-between;padding:0 16px}
+    .content{flex:1;overflow-y:auto;padding:20px}
+    .top-actions{display:flex;gap:8px;align-items:center}
+    .btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:4px;font-size:13px;font-weight:500;cursor:pointer;border:none}
+    .btn-primary{background:#0070d2;color:#fff}
+    .btn-secondary{background:#fff;border:1px solid var(--sap-border);color:var(--sap-text)}
+    .btn-sm{padding:4px 10px;font-size:12px}
+    .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+    .kpi-card{background:#fff;border:1px solid var(--sap-border);border-radius:6px;padding:14px 16px}
+    .kpi-card .label{font-size:11px;color:var(--sap-muted);text-transform:uppercase;letter-spacing:.4px}
+    .kpi-card .value{font-size:24px;font-weight:700;margin-top:4px;color:#003865}
+    .kpi-card .sub{font-size:12px;color:var(--sap-muted);margin-top:2px}
+    .badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:500}
+    .badge-done{background:#eafaf1;color:#27ae60}
+    .badge-pending{background:#fef9e7;color:#f39c12}
+    .badge-blocked{background:#fdecea;color:#e74c3c}
+    .badge-progress{background:#e8f4fd;color:#0070d2}
+    .data-table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--sap-border);border-radius:6px;overflow:hidden}
+    .data-table th{background:#003865;color:#fff;padding:10px 14px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;user-select:none;cursor:pointer;white-space:nowrap}
+    .data-table td{padding:10px 14px;border-bottom:1px solid var(--sap-border);font-size:13px}
+    .data-table tr:hover td{background:#f8f9fb}
+    .card{background:#fff;border:1px solid var(--sap-border);border-radius:6px;padding:16px;margin-bottom:12px}
+    .card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+    .bar-wrap{display:flex;align-items:center;gap:8px}
+    .bar-bg{flex:1;height:8px;background:var(--sap-border);border-radius:4px;overflow:hidden;min-width:80px}
+    .bar-fill{height:100%;border-radius:4px}
+    .bar-ok{background:#27ae60}
+    .bar-warn{background:#f39c12}
+    .bar-bad{background:#e74c3c}
+    .alert{padding:8px 12px;border-radius:0 4px 4px 0;margin-bottom:12px}
+    .alert.critical{background:#fdecea;border-left:3px solid #e74c3c}
+    .alert.warning{background:#fef9e7;border-left:3px solid #f39c12}
+    .alert.positive{background:#eafaf1;border-left:3px solid #27ae60}
+    .empty{text-align:center;padding:48px 20px;color:var(--sap-muted)}
+    .empty i{font-size:40px;display:block;margin-bottom:12px}
+    .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+    .toolbar .split{flex:1}
+    .search{display:inline-flex;align-items:center;border:1px solid var(--sap-border);background:#fff;border-radius:4px;padding:6px 8px;gap:6px}
+    .search input{border:none;outline:none;font-size:13px}
+    .pill-group .btn{padding:6px 10px}
+    .muted{color:var(--sap-muted)}
+    .right{float:right}
+    .table-actions{display:flex;gap:6px}
+    .th-sort::after{content:"";display:inline-block;margin-left:6px;border:4px solid transparent;border-top-color:#fff;transform:translateY(2px)}
+    .th-sort.desc::after{border-top-color:transparent;border-bottom-color:#fff;transform:translateY(-2px)}
+    .small{font-size:12px}
+    .mono{font-family:ui-monospace, SFMono-Regular, Menlo, monospace}
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="logo">
+      <i class="bi bi-box-seam"></i> Manager Hub
+    </div>
+    <nav>
+      <a href="#" class="active"><i class="bi bi-trash3"></i> SCRUM-54 — Delete Products</a>
+      <a href="#"><i class="bi bi-collection"></i> Catalog Overview</a>
+      <a href="#"><i class="bi bi-cart-check"></i> Orders</a>
+      <a href="#"><i class="bi bi-people"></i> Customers</a>
+      <a href="#"><i class="bi bi-gear"></i> Settings</a>
+    </nav>
+    <div style="padding:10px 16px;opacity:.8" class="small">
+      <i class="bi bi-info-circle"></i> Demo UI for delete_product(product_id)
+    </div>
+  </aside>
+
+  <div style="flex:1;display:flex;flex-direction:column">
+    <div class="topbar">
+      <div>
+        <strong>Delete Products</strong>
+        <span class="muted">• SQLite-backed catalog</span>
+      </div>
+      <div class="top-actions">
+        <button class="btn btn-secondary btn-sm" id="btnReset">
+          <i class="bi bi-arrow-repeat"></i> Reset Demo Data
+        </button>
+        <button class="btn btn-primary btn-sm" id="btnHelp">
+          <i class="bi bi-question-circle"></i> Help
+        </button>
+      </div>
+    </div>
+
+    <main class="content">
+      <div id="messageArea"></div>
+
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="label">Total Products</div>
+          <div class="value" id="kpiTotal">0</div>
+          <div class="sub">Current rows in products</div>
+        </div>
+        <div class="kpi-card">
+          <div class="label">Deletable</div>
+          <div class="value" id="kpiDeletable">0</div>
+          <div class="sub bar-wrap">
+            <div class="bar-bg"><div class="bar-fill bar-ok" id="barDeletable" style="width:0%"></div></div>
+            <span class="muted small" id="lblDeletablePct">0%</span>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="label">Blocked (FK)</div>
+          <div class="value" id="kpiBlocked">0</div>
+          <div class="sub">Linked to orders</div>
+        </div>
+        <div class="kpi-card">
+          <div class="label">Deleted (session)</div>
+          <div class="value" id="kpiDeleted">0</div>
+          <div class="sub">Confirmed deletions</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="toolbar">
+          <div class="pill-group">
+            <button class="btn btn-primary btn-sm" data-filter="all"><i class="bi bi-layers"></i> All</button>
+            <button class="btn btn-secondary btn-sm" data-filter="deletable"><i class="bi bi-check-circle"></i> Deletable</button>
+            <button class="btn btn-secondary btn-sm" data-filter="linked"><i class="bi bi-link-45deg"></i> Linked</button>
+          </div>
+          <div class="split"></div>
+          <div class="search">
+            <i class="bi bi-search"></i>
+            <input type="text" id="searchInput" placeholder="Search products...">
+          </div>
+        </div>
+
+        <table class="data-table" id="productsTable">
+          <thead>
+            <tr>
+              <th data-key="id" class="th-sort">ID</th>
+              <th data-key="name">Name</th>
+              <th data-key="category">Category</th>
+              <th data-key="price">Price</th>
+              <th data-key="stock">Stock</th>
+              <th data-key="status">Status</th>
+              <th data-key="updated_at">Updated</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="productsBody">
+            <!-- rows -->
+          </tbody>
+        </table>
+
+        <div id="emptyState" class="empty" style="display:none">
+          <i class="bi bi-box"></i>
+          No products match your filters.
+        </div>
+      </div>
+
+      <div class="card-grid">
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div>
+              <strong>delete_product API Playground</strong>
+              <div class="muted small">Simulates validation and error mapping</div>
+            </div>
+          </div>
+          <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
+            <label class="muted small">Product ID</label>
+            <input id="apiIdInput" type="number" min="1" step="1" placeholder="e.g., 101" style="padding:7px 10px;border:1px solid var(--sap-border);border-radius:4px;width:140px">
+            <button class="btn btn-primary btn-sm" id="apiDeleteBtn"><i class="bi bi-trash"></i> delete_product(id)</button>
+            <span class="muted small">Returns 1 on success; raises ProductNotFoundError if missing; IntegrityError if linked.</span>
+          </div>
+          <div id="apiMessage" style="margin-top:10px"></div>
+        </div>
+        <div class="card">
+          <strong>Activity Log</strong>
+          <div class="muted small">Recent delete attempts</div>
+          <div id="activityLog" style="margin-top:10px;max-height:200px;overflow:auto"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // Sample data (SQLite-backed 'products' table assumed)
+    const initialProducts = [
+      { id:101, name:"Pro Keyboard", category:"Accessories", price:89.99, stock:120, linked:false, updated_at:"2026-09-25 10:42" },
+      { id:102, name:'4K Monitor 27"', category:"Displays", price:329.00, stock:25, linked:true, updated_at:"2026-09-20 16:03" },
+      { id:103, name:"USB-C Hub 8-in-1", category:"Accessories", price:49.50, stock:0, linked:false, updated_at:"2026-09-19 08:18" },
+      { id:104, name:"Gaming Mouse", category:"Accessories", price:59.00, stock:300, linked:false, updated_at:"2026-09-28 12:54" },
+      { id:105, name:"Enterprise Router", category:"Networking", price:649.00, stock:10, linked:true, updated_at:"2026-09-22 09:15" },
+      { id:106, name:"Noise-Cancel Headset", category:"Audio", price:199.99, stock:45, linked:false, updated_at:"2026-09-27 14:21" }
+    ];
+
+    // State
+    let products = JSON.parse(JSON.stringify(initialProducts));
+    let deletedCount = 0;
+    let filter = "all";
+    let search = "";
+    let sortKey = "id";
+    let sortDir = "asc"; // 'asc' | 'desc'
+    const activity = [];
+
+    // Error classes mirroring Python API
+    class ProductNotFoundError extends Error { constructor(productId){ super(`Product with id ${productId} not found.`); this.name="ProductNotFoundError"; this.productId=productId; } }
+    class IntegrityError extends Error { constructor(msg){ super(msg||"Foreign key constraint failed"); this.name="IntegrityError"; } }
+    class ValueError extends Error { constructor(msg){ super(msg||"Invalid value"); this.name="ValueError"; } }
+
+    // delete_product(product_id) -> int (simulate)
+    function delete_product(product_id){
+      if (typeof product_id === "boolean" || !Number.isInteger(product_id)) {
+        throw new ValueError("product_id must be an integer.");
+      }
+      if (product_id <= 0) {
+        throw new ValueError("product_id must be a positive integer.");
+      }
+      const idx = products.findIndex(p => p.id === product_id);
+      if (idx === -1) {
+        throw new ProductNotFoundError(product_id);
+      }
+      const p = products[idx];
+      if (p.linked) {
+        // Simulate PRAGMA foreign_keys=ON preventing delete
+        throw new IntegrityError("Delete blocked by foreign key constraints.");
+      }
+      // Simulate transactional delete
+      products.splice(idx, 1);
+      return 1;
+    }
+
+    // UI helpers
+    function fmtCurrency(v){ return v.toLocaleString(undefined,{style:'currency',currency:'USD'}); }
+    function showMessage(container, type, text){
+      const el = document.createElement("div");
+      el.className = `alert ${type}`;
+      el.innerHTML = text;
+      const area = (typeof container === "string") ? document.getElementById(container) : container;
+      area.innerHTML = "";
+      area.appendChild(el);
+      setTimeout(()=>{ if(area === document.getElementById("messageArea")) area.innerHTML=""; }, 5000);
+    }
+    function addActivity(entry){
+      activity.unshift(entry);
+      renderActivity();
+    }
+
+    function computeKPIs(){
+      const total = products.length;
+      const blocked = products.filter(p => p.linked).length;
+      const deletable = total - blocked;
+      return { total, deletable, blocked, deleted: deletedCount, deletablePct: total ? Math.round((deletable/total)*100) : 0 };
+    }
+
+    function renderKPIs(){
+      const k = computeKPIs();
+      document.getElementById("kpiTotal").textContent = k.total;
+      document.getElementById("kpiDeletable").textContent = k.deletable;
+      document.getElementById("kpiBlocked").textContent = k.blocked;
+      document.getElementById("kpiDeleted").textContent = k.deleted;
+      document.getElementById("barDeletable").style.width = `${k.deletablePct}%`;
+      document.getElementById("lblDeletablePct").textContent = `${k.deletablePct}%`;
+    }
+
+    function applyFilterAndSearch(list){
+      let filtered = list;
+      if (filter === "deletable") filtered = filtered.filter(p => !p.linked);
+      if (filter === "linked") filtered = filtered.filter(p => p.linked);
+      if (search) {
+        const q = search.toLowerCase();
+        filtered = filtered.filter(p =>
+          String(p.id).includes(q) ||
+          p.name.toLowerCase().includes(q) ||
+          p.category.toLowerCase().includes(q)
+        );
+      }
+      return filtered;
+    }
+
+    function sortData(list){
+      const sorted = [...list];
+      sorted.sort((a,b)=>{
+        let av, bv;
+        switch(sortKey){
+          case "price": av=a.price; bv=b.price; break;
+          case "stock": av=a.stock; bv=b.stock; break;
+          case "name": av=a.name.toLowerCase(); bv=b.name.toLowerCase(); break;
+          case "category": av=a.category.toLowerCase(); bv=b.category.toLowerCase(); break;
+          case "status": av=a.linked?1:0; bv=b.linked?1:0; break;
+          case "updated_at": av=new Date(a.updated_at).getTime(); bv=new Date(b.updated_at).getTime(); break;
+          default: av=a.id; bv=b.id;
+        }
+        if (av < bv) return sortDir === "asc" ? -1 : 1;
+        if (av > bv) return sortDir === "asc" ? 1 : -1;
+        return 0;
+      });
+      return sorted;
+    }
+
+    function renderTable(){
+      const body = document.getElementById("productsBody");
+      body.innerHTML = "";
+      const data = sortData(applyFilterAndSearch(products));
+      document.getElementById("emptyState").style.display = data.length ? "none" : "block";
+      data.forEach(p=>{
+        const tr = document.createElement("tr");
+        const statusBadge = p.linked
+          ? `<span class="badge badge-blocked"><i class="bi bi-link-45deg"></i>&nbsp;Linked</span>`
+          : `<span class="badge badge-progress"><i class="bi bi-check"></i>&nbsp;Deletable</span>`;
+        tr.innerHTML = `
+          <td class="mono">${p.id}</td>
+          <td>${p.name}</td>
+          <td>${p.category}</td>
+          <td>${fmtCurrency(p.price)}</td>
+          <td>${p.stock}</td>
+          <td>${statusBadge}</td>
+          <td><span class="muted small">${p.updated_at}</span></td>
+          <td>
+            <div class="table-actions">
+              <button class="btn btn-secondary btn-sm" data-action="delete" data-id="${p.id}">
+                <i class="bi bi-trash"></i> Delete
+              </button>
+            </div>
+          </td>
+        `;
+        body.appendChild(tr);
+      });
+    }
+
+    function renderActivity(){
+      const log = document.getElementById("activityLog");
+      if (!activity.length){
+        log.innerHTML = `<div class="muted">No activity yet.</div>`;
+        return;
+      }
+      log.innerHTML = activity.map(a=>{
+        const badgeClass = a.outcome==="success" ? "badge-done" : (a.outcome==="not_found" ? "badge-pending" : "badge-blocked");
+        const badgeText = a.outcome==="success" ? "Deleted" : (a.outcome==="not_found" ? "Not found" : "Blocked");
+        return `
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--sap-border)">
+            <span class="badge ${badgeClass}">${badgeText}</span>
+            <span class="mono">id=${a.id}</span>
+            <span class="muted small">${a.time}</span>
+            <span class="small">${a.message}</span>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function refresh(){
+      renderKPIs();
+      renderTable();
+    }
+
+    // Event handlers
+    document.addEventListener("click", (e)=>{
+      const t = e.target.closest("button");
+      if (!t) return;
+
+      // Filter pills
+      if (t.hasAttribute("data-filter")){
+        document.querySelectorAll('.pill-group .btn').forEach(b=>b.classList.remove('btn-primary'));
+        document.querySelectorAll('.pill-group .btn').forEach(b=>b.classList.add('btn-secondary'));
+        t.classList.add('btn-primary');
+        t.classList.remove('btn-secondary');
+        filter = t.getAttribute("data-filter");
+        refresh();
+        return;
+      }
+
+      // Delete action in table
+      if (t.dataset.action === "delete"){
+        const id = parseInt(t.dataset.id,10);
+        try{
+          const n = delete_product(id);
+          if (n === 1){
+            deletedCount += 1;
+            showMessage("messageArea", "positive", `<strong>Deleted:</strong> Product with id <span class="mono">${id}</span> removed.`);
+            addActivity({ time:new Date().toLocaleString(), action:"delete", id, outcome:"success", message:"Row count = 1" });
+            refresh();
+          }
+        }catch(err){
+          if (err instanceof ProductNotFoundError){
+            showMessage("messageArea", "warning", `<strong>Not Found:</strong> ${err.message}`);
+            addActivity({ time:new Date().toLocaleString(), action:"delete", id, outcome:"not_found", message:err.message });
+          } else if (err instanceof IntegrityError){
+            showMessage("messageArea", "critical", `<strong>Blocked:</strong> ${err.message} (product is linked to other tables)`);
+            addActivity({ time:new Date().toLocaleString(), action:"delete", id, outcome:"blocked", message:err.message });
+          } else if (err instanceof ValueError){
+            showMessage("messageArea", "warning", `<strong>Validation:</strong> ${err.message}`);
+            addActivity({ time:new Date().toLocaleString(), action:"delete", id, outcome:"not_found", message:err.message });
+          } else {
+            showMessage("messageArea", "critical", `<strong>Error:</strong> ${err.message || String(err)}`);
+            addActivity({ time:new Date().toLocaleString(), action:"delete", id, outcome:"error", message:err.message || String(err) });
+          }
+        }
+      }
+
+      if (t.id === "btnReset"){
+        products = JSON.parse(JSON.stringify(initialProducts));
+        deletedCount = 0;
+        filter = "all";
+        document.querySelectorAll('.pill-group .btn').forEach((b,i)=>{
+          b.classList.toggle('btn-primary', i===0);
+          b.classList.toggle('btn-secondary', i!==0);
+        });
+        search = "";
+        document.getElementById("searchInput").value="";
+        sortKey="id"; sortDir="asc";
+        document.querySelectorAll("th.th-sort").forEach(th=>th.classList.remove("desc"));
+        addActivity({ time:new Date().toLocaleString(), action:"reset", id:"-", outcome:"success", message:"Demo data reset" });
+        refresh();
+      }
+
+      if (t.id === "btnHelp"){
+        showMessage("messageArea", "positive", `
+          <strong>Behavior:</strong> delete_product(id) returns 1 on success, raises ProductNotFoundError if id is missing, and IntegrityError when foreign key constraints block deletion.
+        `);
+      }
+
+      if (t.id === "apiDeleteBtn"){
+        const val = document.getElementById("apiIdInput").value;
+        const id = Number(val);
+        const area = document.getElementById("apiMessage");
+        try{
+          const n = delete_product(id);
+          if (n === 1){
+            deletedCount += 1;
+            area.innerHTML = '';
+            showMessage(area, "positive", `<strong>OK:</strong> Deleted product id <span class="mono">${id}</span>. Returned 1.`);
+            addActivity({ time:new Date().toLocaleString(), action:"api.delete", id, outcome:"success", message:"Row count = 1" });
+            refresh();
+          }
+        }catch(err){
+          if (err instanceof ValueError){
+            showMessage(area, "warning", `<strong>Validation:</strong> ${err.message}`);
+            addActivity({ time:new Date().toLocaleString(), action:"api.delete", id:val||"-", outcome:"not_found", message:err.message });
+          }else if (err instanceof ProductNotFoundError){
+            showMessage(area, "warning", `<strong>Not Found:</strong> ${err.message}`);
+            addActivity({ time:new Date().toLocaleString(), action:"api.delete", id, outcome:"not_found", message:err.message });
+          }else if (err instanceof IntegrityError){
+            showMessage(area, "critical", `<strong>Blocked:</strong> ${err.message}`);
+            addActivity({ time:new Date().toLocaleString(), action:"api.delete", id, outcome:"blocked", message:err.message });
+          }else{
+            showMessage(area, "critical", `<strong>Error:</strong> ${err.message || String(err)}`);
+            addActivity({ time:new Date().toLocaleString(), action:"api.delete", id, outcome:"error", message:err.message || String(err) });
+          }
+        }
+      }
+    });
+
+    document.getElementById("searchInput").addEventListener("input", (e)=>{
+      search = e.target.value.trim();
+      refresh();
+    });
+
+    // Sorting
+    document.querySelectorAll("#productsTable thead th").forEach((th, idx)=>{
+      const key = th.getAttribute("data-key");
+      if (!key) return;
+      th.classList.add("th-sort");
+      th.addEventListener("click", ()=>{
+        if (sortKey === key){
+          sortDir = (sortDir === "asc") ? "desc" : "asc";
+          th.classList.toggle("desc", sortDir === "desc");
+        } else {
+          // reset others
+          document.querySelectorAll("#productsTable thead th.th-sort").forEach(t=>t.classList.remove("desc"));
+          sortKey = key;
+          sortDir = "asc";
+          th.classList.remove("desc");
+        }
+        refresh();
+      });
+    });
+
+    // Initial render
+    refresh();
+  </script>
+</body>
+</html>
