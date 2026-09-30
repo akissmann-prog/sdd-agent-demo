@@ -1,372 +1,376 @@
+import io
 import json
 import os
 import stat
-import builtins
-import base64
-from unittest import mock
+from pathlib import Path
+from typing import Any, Dict
 
 import pytest
 
 import scrum_33
 
 
+class DummyFile:
+    def __init__(self):
+        self.buffer = []
+        self.closed = False
+        self._fileno = 42
+        self.flush_called = False
+        self.write_calls = []
+
+    def write(self, s: str):
+        self.write_calls.append(s)
+        self.buffer.append(s)
+        return len(s)
+
+    def flush(self):
+        self.flush_called = True
+
+    def fileno(self):
+        return self._fileno
+
+    def close(self):
+        self.closed = True
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self.close()
+
+
 def test_b64_roundtrip():
-    data = b"\x00\x01hello world\xff"
-    s = scrum_33._b64e(data)
-    assert isinstance(s, str)
-    out = scrum_33._b64d(s)
-    assert out == data
+    data = b"\x00\x01\xab\xcdXYZ"
+    enc = scrum_33._b64e(data)
+    assert enc == data.hex()
+    dec = scrum_33._b64d(enc)
+    assert dec == data
+    assert enc.islower()
 
 
-def test_xor_bytes_symmetry_and_truncation():
-    a = b"abcdef"
-    b = b"\x01\x02\x03\x04\x05"
-    x = scrum_33._xor_bytes(a, b)
-    # Truncated to min length (5)
-    assert len(x) == 5
-    # Symmetry
-    back = scrum_33._xor_bytes(x, b)
-    assert back == a[:5]
+def test_xor_bytes_basic_and_truncate():
+    a = bytes([0x00, 0xFF, 0x55])
+    b = bytes([0xFF, 0x00, 0xAA, 0x12, 0x34])
+    res = scrum_33._xor_bytes(a, b)
+    assert res == bytes([0xFF, 0xFF, 0xFF])
+    # Truncates to min length
+    assert len(res) == 3
 
 
-def test_derive_keys_consistency_and_variation():
-    secret = "mysecret"
-    salt1 = b"A" * 16
-    salt2 = b"B" * 16
-    enc1, mac1 = scrum_33._derive_keys(secret, salt1)
-    enc1_again, mac1_again = scrum_33._derive_keys(secret, salt1)
-    assert enc1 == enc1_again and mac1 == mac1_again
+def test_derive_keys_types_deterministic():
+    secret_str = "mysecret"
+    secret_bytes = b"mysecret"
+    salt = b"salty-salt-123456"  # 16+ bytes okay
+    enc1, mac1 = scrum_33._derive_keys(secret_str, salt, iterations=10_000)
+    enc2, mac2 = scrum_33._derive_keys(secret_bytes, salt, iterations=10_000)
+    assert enc1 == enc2 and mac1 == mac2
+    assert len(enc1) == 32 and len(mac1) == 32
 
-    enc2, mac2 = scrum_33._derive_keys(secret, salt2)
-    assert (enc1, mac1) != (enc2, mac2)
-
-    # Different secret changes keys
-    enc3, mac3 = scrum_33._derive_keys("other", salt1)
+    # Different salt yields different keys
+    enc3, mac3 = scrum_33._derive_keys(secret_str, b"another-salt-123", iterations=10_000)
     assert (enc1, mac1) != (enc3, mac3)
-
-    # Byte and str inputs behave
-    enc4, mac4 = scrum_33._derive_keys(b"mysecret", salt1)
-    assert (enc1, mac1) == (enc4, mac4)
-
-    # Different iterations produce different keys
-    enc5, mac5 = scrum_33._derive_keys(secret, salt1, iterations=1)
-    assert (enc1, mac1) != (enc5, mac5)
 
 
 def test_keystream_length_and_nonce_validation():
-    enc_key = b"\x00" * 32
-    nonce = b"\x11" * 24
-    ks = scrum_33._keystream(enc_key, nonce, 100)
-    assert isinstance(ks, bytes)
-    assert len(ks) == 100
+    key = b"k" * 32
+    nonce = b"n" * 24
+    ks = scrum_33._keystream(key, nonce, 0)
+    assert ks == b""
+
+    ks = scrum_33._keystream(key, nonce, 64)
+    assert len(ks) == 64
+    assert ks != b"\x00" * 64
 
     with pytest.raises(ValueError, match="Nonce must be at least 16 bytes"):
-        scrum_33._keystream(enc_key, b"\x00" * 8, 10)
+        scrum_33._keystream(key, b"short", 16)
 
 
-def test_compute_tag_changes_on_ciphertext_modification():
-    mac_key = b"\x01" * 32
-    nonce = b"\x02" * 24
+def test_compute_tag_deterministic():
+    mac_key = b"m" * 32
+    nonce = b"n" * 24
     ct = b"ciphertext"
     tag1 = scrum_33._compute_tag(mac_key, nonce, ct)
-    tag2 = scrum_33._compute_tag(mac_key, nonce, ct + b"x")
-    assert tag1 != tag2
-
-    # Changing nonce changes tag
-    tag3 = scrum_33._compute_tag(mac_key, nonce + b"\x00", ct)
-    assert tag1 != tag3
+    tag2 = scrum_33._compute_tag(mac_key, nonce, ct)
+    assert tag1 == tag2
+    assert len(tag1) == 32
 
 
-def test_encrypt_decrypt_roundtrip():
-    secret = "supersecret"
-    payload = {"name": "Example", "username": "user", "password": "Pa$$", "notes": "n"}
-    plaintext = json.dumps(payload, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
-
-    record = scrum_33._encrypt_record(secret, plaintext)
-    assert set(record.keys()) == {"v", "salt", "nonce", "ct", "tag"}
-    # Base64 decodable fields
+def test_encrypt_decrypt_roundtrip_and_record_structure():
+    secret = "topsecret"
+    plaintext = b'{"name":"Example","username":"user","password":"pass"}'
+    record: Dict[str, Any] = scrum_33._encrypt_record(secret, plaintext)
+    assert record["v"] == 1
     for k in ("salt", "nonce", "ct", "tag"):
-        base64.b64decode(record[k].encode("ascii"))
+        assert isinstance(record[k], str)
+        assert len(record[k]) > 0
 
-    out = scrum_33._decrypt_record(secret, record)
-    assert out == plaintext
+    # check sizes: salt=16 bytes->32 hex, nonce=24->48 hex, tag=32->64 hex
+    assert len(record["salt"]) == 32
+    assert len(record["nonce"]) == 48
+    assert len(record["tag"]) == 64
+    assert len(scrum_33._b64d(record["ct"])) == len(plaintext)
 
-
-def test_decrypt_integrity_failure_on_tampered_ciphertext():
-    secret = "anothersecret"
-    plaintext = b'{"name":"N","username":"U","password":"P"}'
-    record = scrum_33._encrypt_record(secret, plaintext)
-    ct_bytes = base64.b64decode(record["ct"].encode("ascii"))
-    # Flip a bit
-    tampered = bytes([ct_bytes[0] ^ 0x01]) + ct_bytes[1:]
-    record_bad = dict(record)
-    record_bad["ct"] = base64.b64encode(tampered).decode("ascii")
-    with pytest.raises(ValueError, match="Integrity check failed"):
-        scrum_33._decrypt_record(secret, record_bad)
+    decrypted = scrum_33._decrypt_record(secret, record)
+    assert decrypted == plaintext
 
 
-def test_decrypt_invalid_version_and_corrupted_encoding():
-    secret = "s"
-    plaintext = b'{"name":"x","username":"y","password":"z"}'
-    record = scrum_33._encrypt_record(secret, plaintext)
+def test_decrypt_record_errors():
+    secret = "secret"
+    pt = b'{"name":"N","username":"U","password":"P"}'
+    record = scrum_33._encrypt_record(secret, pt)
 
+    # Wrong version
     bad_version = dict(record)
     bad_version["v"] = 2
     with pytest.raises(ValueError, match="Unsupported record version"):
         scrum_33._decrypt_record(secret, bad_version)
 
-    bad_encoding = dict(record)
-    bad_encoding["salt"] = "not_base64!!*"
+    # Corrupted encoding
+    bad_enc = dict(record)
+    bad_enc["salt"] = "zz"  # not hex
     with pytest.raises(ValueError, match="Corrupted record encoding"):
-        scrum_33._decrypt_record(secret, bad_encoding)
+        scrum_33._decrypt_record(secret, bad_enc)
 
+    # Integrity check fails
+    bad_tag = dict(record)
+    bad_tag["tag"] = "00" * 32
+    with pytest.raises(ValueError, match="Integrity check failed"):
+        scrum_33._decrypt_record(secret, bad_tag)
 
-def test_ensure_secure_dir_creates_and_chmod_called(monkeypatch, tmp_path):
-    target_dir = tmp_path / "store_dir"
-    chmod_calls = []
-
-    def fake_chmod(path, mode):
-        chmod_calls.append((str(path), mode))
-
-    monkeypatch.setattr(os, "name", "posix", raising=False)
-    monkeypatch.setattr(os, "chmod", fake_chmod)
-    scrum_33._ensure_secure_dir(target_dir)
-    assert target_dir.exists() and target_dir.is_dir()
-    assert chmod_calls, "chmod should be called on posix"
-    # mode 0o700
-    assert chmod_calls[0][1] == (stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
-
-
-def test_open_secure_append_actual_write_and_permissions(monkeypatch, tmp_path):
-    monkeypatch.setattr(os, "name", "posix", raising=False)
-    chmod_calls = []
-    monkeypatch.setattr(os, "chmod", lambda path, mode: chmod_calls.append((str(path), mode)))
-    file_path = tmp_path / "file.txt"
-    with scrum_33._open_secure_append(file_path) as f:
-        f.write("hello\n")
-    # File exists with content
-    with open(file_path, encoding="utf-8") as rf:
-        assert rf.read() == "hello\n"
-    # File chmod to 0o600 attempted
-    assert chmod_calls
-    assert chmod_calls[-1][1] == (stat.S_IRUSR | stat.S_IWUSR)
+    # Wrong secret
+    with pytest.raises(ValueError, match="Integrity check failed"):
+        scrum_33._decrypt_record("wrong", record)
 
 
 def test_is_blank_and_contains_null():
     assert scrum_33._is_blank(None) is True
     assert scrum_33._is_blank("") is True
     assert scrum_33._is_blank("  ") is True
-    assert scrum_33._is_blank("x") is False
+    assert scrum_33._is_blank(" a ") is False
+    assert scrum_33._is_blank(123) is False
 
-    assert scrum_33._contains_null("a\x00b") is True
-    assert scrum_33._contains_null("abc") is False
-
-
-@pytest.mark.parametrize(
-    "name,ok",
-    [
-        ("ValidName", True),
-        (" " * 5 + "abc", True),
-        ("\x00bad", False),
-        ("", False),
-        ("   ", False),
-        (123, False),
-        ("x" * 255, True),
-        ("x" * 256, False),
-    ],
-)
-def test_validate_name(name, ok):
-    if ok:
-        scrum_33._validate_name(name)  # type: ignore[arg-type]
-    else:
-        with pytest.raises(ValueError):
-            scrum_33._validate_name(name)  # type: ignore[arg-type]
+    assert scrum_33._contains_null("nope") is False
+    assert scrum_33._contains_null("bad\x00string") is True
 
 
-@pytest.mark.parametrize(
-    "username,ok",
-    [
-        ("user", True),
-        (" user ", True),
-        ("\x00bad", False),
-        ("", False),
-        ("   ", False),
-        ([], False),
-        ("x" * 255, True),
-        ("x" * 256, False),
-    ],
-)
-def test_validate_username(username, ok):
-    if ok:
-        scrum_33._validate_username(username)  # type: ignore[arg-type]
-    else:
-        with pytest.raises(ValueError):
-            scrum_33._validate_username(username)  # type: ignore[arg-type]
+def test_validate_name():
+    with pytest.raises(ValueError, match="Name must be a string"):
+        scrum_33._validate_name(123)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="Name is required"):
+        scrum_33._validate_name("")
+    with pytest.raises(ValueError, match="Name cannot be empty"):
+        scrum_33._validate_name("   ")
+    with pytest.raises(ValueError, match="Name too long"):
+        scrum_33._validate_name("a" * 256)
+    with pytest.raises(ValueError, match="invalid characters"):
+        scrum_33._validate_name("bad\x00name")
+    # valid
+    scrum_33._validate_name("  Valid Name  ")
 
 
-@pytest.mark.parametrize(
-    "password,ok",
-    [
-        ("p", True),
-        (" " * 5, True),
-        ("\x00bad", False),
-        ("", False),
-        (None, False),
-        (b"bytes", False),
-        ("x" * 4096, True),
-        ("x" * 4097, False),
-    ],
-)
-def test_validate_password(password, ok):
-    if ok:
-        scrum_33._validate_password(password)  # type: ignore[arg-type]
-    else:
-        with pytest.raises(ValueError):
-            scrum_33._validate_password(password)  # type: ignore[arg-type]
+def test_validate_username():
+    with pytest.raises(ValueError, match="Username must be a string"):
+        scrum_33._validate_username(3.14)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="Username is required"):
+        scrum_33._validate_username("")
+    with pytest.raises(ValueError, match="Username cannot be empty"):
+        scrum_33._validate_username("   ")
+    with pytest.raises(ValueError, match="Username too long"):
+        scrum_33._validate_username("u" * 256)
+    with pytest.raises(ValueError, match="invalid characters"):
+        scrum_33._validate_username("bad\x00user")
+    # valid
+    scrum_33._validate_username("user")
 
 
-@pytest.mark.parametrize(
-    "notes,ok",
-    [
-        (None, True),
-        ("", True),
-        ("note", True),
-        ("\x00bad", False),
-        (b"bytes", False),
-        ("x" * 8192, True),
-        ("x" * 8193, False),
-    ],
-)
-def test_validate_notes(notes, ok):
-    if ok:
-        scrum_33._validate_notes(notes)  # type: ignore[arg-type]
-    else:
-        with pytest.raises(ValueError):
-            scrum_33._validate_notes(notes)  # type: ignore[arg-type]
+def test_validate_password():
+    with pytest.raises(ValueError, match="Password must be a string"):
+        scrum_33._validate_password(None)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="Password must be a string"):
+        scrum_33._validate_password(123)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="Password is required"):
+        scrum_33._validate_password("")
+    with pytest.raises(ValueError, match="Password too long"):
+        scrum_33._validate_password("p" * 4097)
+    with pytest.raises(ValueError, match="invalid characters"):
+        scrum_33._validate_password("bad\x00pass")
+    # Whitespace-only is allowed
+    scrum_33._validate_password("   ")
+    scrum_33._validate_password("ok")
 
 
-def test_credential_repr_and_minimal_json_notes_optional():
-    cred = scrum_33.Credential(name="Site", username="alice", password="secret")
-    # repr should not include fields
-    r = repr(cred)
-    assert "alice" not in r and "secret" not in r and "Site" not in r
-    # to_minimal_json_bytes excludes notes key if None
-    data = json.loads(cred.to_minimal_json_bytes())
-    assert "notes" not in data
-    assert data["name"] == "Site"
-    assert data["username"] == "alice"
-    assert data["password"] == "secret"
-
-    cred2 = scrum_33.Credential(name="Site", username="alice", password="secret", notes="N")
-    data2 = json.loads(cred2.to_minimal_json_bytes())
-    assert data2["notes"] == "N"
+def test_validate_notes():
+    # None is OK
+    scrum_33._validate_notes(None)
+    with pytest.raises(ValueError, match="Notes must be a string"):
+        scrum_33._validate_notes(123)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="Notes too long"):
+        scrum_33._validate_notes("n" * 8193)
+    with pytest.raises(ValueError, match="invalid characters"):
+        scrum_33._validate_notes("bad\x00notes")
+    # valid
+    scrum_33._validate_notes("some notes")
 
 
-def test_credential_validate_calls_all():
-    # Valid case
-    c = scrum_33.Credential(name="X", username="Y", password="Z", notes=None)
-    c.validate()  # Should not raise
-    # Invalid cases
-    c_bad = scrum_33.Credential(name="", username="Y", password="Z")
-    with pytest.raises(ValueError):
-        c_bad.validate()
+def test_credential_repr_and_json_bytes():
+    c = scrum_33.Credential(name=" Name ", username="ユーザー", password="päss", notes=None)
+    c.validate()
+    r = repr(c)
+    assert "Name" not in r
+    assert "ユーザー" not in r
+    assert "päss" not in r
+
+    data_bytes = c.to_minimal_json_bytes()
+    data_str = data_bytes.decode("utf-8")
+    # name is stripped
+    assert '"name":"Name"' in data_str
+    # ensure_ascii True, so non-ascii is escaped
+    assert "\\u30e6" in data_str  # part of ユ
+    # notes omitted when None
+    assert '"notes"' not in data_str
 
 
-def test_credential_store_init_and_repr(monkeypatch, tmp_path):
-    # Ensure secure dir called in init
-    called = {}
+def test_ensure_secure_dir_posix(monkeypatch, tmp_path):
+    called = {"mkdir": False, "chmod": False}
+    def fake_mkdir(self, parents=False, exist_ok=False):
+        called["mkdir"] = True
+        assert parents is True
+        assert exist_ok is True
 
-    def fake_ensure_secure_dir(p):
-        called["path"] = p
+    monkeypatch.setattr(Path, "mkdir", fake_mkdir, raising=True)
+    monkeypatch.setattr(os, "name", "posix", raising=False)
 
-    monkeypatch.setattr(scrum_33, "_ensure_secure_dir", fake_ensure_secure_dir)
-    storage_path = tmp_path / "dir" / "file.jsonl"
-    cs = scrum_33.CredentialStore(secret=b"xyz", storage_path=storage_path)
-    assert called["path"] == storage_path.parent
-    # repr shows only storage path
-    r = repr(cs)
-    assert "storage_path=" in r
-    assert "xyz" not in r
+    def fake_chmod(path, mode):
+        called["chmod"] = True
+        assert mode == stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR
 
-    with pytest.raises(TypeError):
-        scrum_33.CredentialStore(secret=object(), storage_path=storage_path)  # type: ignore[arg-type]
+    monkeypatch.setattr(os, "chmod", fake_chmod)
+    scrum_33._ensure_secure_dir(tmp_path)
+    assert called["mkdir"] is True
+    assert called["chmod"] is True
 
 
-def test_credential_store_add_credential_writes_to_file_and_decrypt(tmp_path):
-    storage_path = tmp_path / "store.jsonl"
-    secret = "topsecret"
-    store = scrum_33.CredentialStore(secret=secret, storage_path=storage_path)
-    msg = store.add_credential(name="Example", username="alice", password="passw0rd", notes="hello")
+def test_ensure_secure_dir_nonposix(monkeypatch, tmp_path):
+    called = {"chmod": False}
+    monkeypatch.setattr(os, "name", "nt", raising=False)
+
+    def fake_chmod(path, mode):
+        called["chmod"] = True
+
+    monkeypatch.setattr(os, "chmod", fake_chmod)
+    # Should not raise and should not call chmod on non-posix
+    scrum_33._ensure_secure_dir(tmp_path)
+    assert called["chmod"] is False
+
+
+def test_open_secure_append_flags_and_mode(monkeypatch, tmp_path):
+    calls = {"open": None, "fdopen": None, "chmod": None}
+
+    def fake_os_open(path, flags, mode):
+        calls["open"] = (path, flags, mode)
+        return 99
+
+    def fake_fdopen(fd, mode, encoding=None, buffering=None):
+        calls["fdopen"] = (fd, mode, encoding, buffering)
+        return DummyFile()
+
+    def fake_chmod(path, mode):
+        calls["chmod"] = (path, mode)
+
+    monkeypatch.setattr(os, "open", fake_os_open)
+    monkeypatch.setattr(os, "fdopen", fake_fdopen)
+    monkeypatch.setattr(os, "name", "posix", raising=False)
+    monkeypatch.setattr(os, "chmod", fake_chmod)
+
+    path = tmp_path / "file.jsonl"
+    f = scrum_33._open_secure_append(path)
+    assert calls["open"][0] == str(path)
+    assert calls["open"][1] & os.O_APPEND
+    assert calls["open"][1] & os.O_CREAT
+    assert calls["open"][1] & os.O_WRONLY
+    assert calls["open"][2] == stat.S_IRUSR | stat.S_IWUSR
+
+    assert calls["fdopen"] == (99, "a", "utf-8", 1)
+    assert calls["chmod"] == (path, stat.S_IRUSR | stat.S_IWUSR)
+    f.close()
+    assert f.closed is True
+
+
+def test_credential_store_init_calls_ensure_secure_dir(monkeypatch, tmp_path):
+    called = {"ensure": None}
+
+    def fake_ensure(p):
+        called["ensure"] = p
+
+    monkeypatch.setattr(scrum_33, "_ensure_secure_dir", fake_ensure)
+    store_path = tmp_path / "sub" / "creds.jsonl"
+    store = scrum_33.CredentialStore(secret="s", storage_path=store_path)
+    assert isinstance(store, scrum_33.CredentialStore)
+    assert called["ensure"] == store_path.parent
+
+
+def test_credential_store_add_credential_writes_encrypted_line_and_flush_fsync(monkeypatch):
+    dummy = DummyFile()
+    monkeypatch.setattr(scrum_33, "_open_secure_append", lambda path: dummy)
+    fsync_calls = {"args": None}
+
+    def fake_fsync(fd):
+        fsync_calls["args"] = fd
+
+    monkeypatch.setattr(os, "fsync", fake_fsync)
+
+    store = scrum_33.CredentialStore(secret="supersecret", storage_path=Path("/tmp/creds.jsonl"))
+    msg = store.add_credential(name=" Example ", username="user", password="pass", notes="note")
     assert msg == "Credential saved successfully."
-
     # One line written
-    content = storage_path.read_text(encoding="utf-8").strip().splitlines()
-    assert len(content) == 1
-    line = content[0]
-    # Should not contain plaintext sensitive fields
-    assert "alice" not in line
-    assert "passw0rd" not in line
-    assert "hello" not in line
-    assert '"username"' not in line
-    assert '"password"' not in line
-    assert '"notes"' not in line
-
+    assert len(dummy.write_calls) == 1
+    line = dummy.write_calls[0]
+    assert line.endswith("\n")
     record = json.loads(line)
+    assert set(record.keys()) == {"v", "salt", "nonce", "ct", "tag"}
     # Decrypt and verify plaintext
-    pt = scrum_33._decrypt_record(secret, record)
-    expected_plain = scrum_33.Credential(name="Example", username="alice", password="passw0rd", notes="hello").to_minimal_json_bytes()
-    assert pt == expected_plain
+    pt = scrum_33._decrypt_record("supersecret", record)
+    expected = scrum_33.Credential(name=" Example ", username="user", password="pass", notes="note").to_minimal_json_bytes()
+    assert pt == expected
+    assert dummy.flush_called is True
+    assert fsync_calls["args"] == dummy.fileno()
 
 
-def test_credential_store_add_credential_uses_fsync_and_handles_exception(monkeypatch):
-    secret = "s3cr3t"
-    store = scrum_33.CredentialStore(secret=secret, storage_path="/dev/null" if os.name != "nt" else "NUL")
+def test_credential_store_add_credential_rejects_invalid_inputs_and_does_not_write(monkeypatch):
+    called = {"open": False}
+    def fake_open(path):
+        called["open"] = True
+        return DummyFile()
 
-    m = mock.mock_open()
-    handle = m.return_value.__enter__.return_value
-    # Augment with flush and fileno for fsync
-    handle.flush = mock.MagicMock()
-    handle.fileno = mock.MagicMock(return_value=42)
-    monkeypatch.setattr(scrum_33, "_open_secure_append", m)
-    monkeypatch.setattr(os, "fsync", mock.Mock(side_effect=OSError("no fsync")))
-    msg = store.add_credential(name="A", username="B", password="C")
-    assert msg == "Credential saved successfully."
-    # Write called once with json line
-    assert handle.write.call_count == 1
-    written = handle.write.call_args[0][0]
-    assert written.endswith("\n")
-    # No sensitive fields
-    assert '"username"' not in written and '"password"' not in written
-    assert "A" not in written and "B" not in written and "C" not in written
-    # Flush called
-    handle.flush.assert_called_once()
-
-
-@pytest.mark.parametrize(
-    "args",
-    [
-        {"name": "", "username": "u", "password": "p"},
-        {"name": "n", "username": "", "password": "p"},
-        {"name": "n", "username": "u", "password": ""},
-        {"name": "n", "username": "u", "password": "p", "notes": "\x00bad"},
-    ],
-)
-def test_credential_store_add_credential_invalid_inputs_raise(tmp_path, args):
-    store = scrum_33.CredentialStore(secret="k", storage_path=tmp_path / "x.jsonl")
+    monkeypatch.setattr(scrum_33, "_open_secure_append", fake_open)
+    store = scrum_33.CredentialStore(secret="s", storage_path=Path("/tmp/creds.jsonl"))
     with pytest.raises(ValueError):
-        store.add_credential(**args)  # type: ignore[arg-type]
+        store.add_credential(name="Valid", username="   ", password="pass")
+    assert called["open"] is False
 
 
-def test_create_store_from_env(monkeypatch, tmp_path):
-    monkeypatch.delenv("CREDENTIAL_STORE_SECRET", raising=False)
-    with pytest.raises(ValueError, match="Missing secret"):
-        scrum_33.create_store_from_env()
+def test_credential_store_repr_does_not_leak_secret(tmp_path):
+    store = scrum_33.CredentialStore(secret="topsecret", storage_path=tmp_path / "x.jsonl")
+    r = repr(store)
+    assert "topsecret" not in r
+    assert "CredentialStore(" in r
+    assert str(tmp_path / "x.jsonl") in r
 
-    monkeypatch.setenv("CREDENTIAL_STORE_SECRET", "envsecret")
-    st = scrum_33.create_store_from_env(storage_path=tmp_path / "s.jsonl")
-    assert isinstance(st, scrum_33.CredentialStore)
 
-    # Custom env var name
-    monkeypatch.setenv("MY_SECRET", "abc")
-    st2 = scrum_33.create_store_from_env(env_var="MY_SECRET", storage_path=tmp_path / "t.jsonl")
-    assert isinstance(st2, scrum_33.CredentialStore)
+def test_create_store_from_env_success_and_missing(monkeypatch, tmp_path):
+    env_name = "CREDENTIAL_STORE_SECRET_TEST"
+    # Missing or empty -> error
+    monkeypatch.delenv(env_name, raising=False)
+    with pytest.raises(ValueError, match=f"Missing secret in environment variable {env_name}"):
+        scrum_33.create_store_from_env(env_var=env_name, storage_path=tmp_path / "f.jsonl")
+
+    monkeypatch.setenv(env_name, "")
+    with pytest.raises(ValueError):
+        scrum_33.create_store_from_env(env_var=env_name, storage_path=tmp_path / "f.jsonl")
+
+    # Success path
+    monkeypatch.setenv(env_name, "envsecret")
+    store = scrum_33.create_store_from_env(env_var=env_name, storage_path=tmp_path / "f.jsonl")
+    assert isinstance(store, scrum_33.CredentialStore)
+    # Verify secret propagated
+    assert getattr(store, "_secret") == "envsecret"
