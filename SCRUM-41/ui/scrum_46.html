@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>SCRUM-46 — Products Catalog Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    :root{
+      --sap-dark:#003865;
+      --sap-blue:#0070d2;
+      --sap-light:#f5f6fa;
+      --sap-border:#d1d8e0;
+      --sap-text:#32363a;
+      --sap-muted:#6e7a8a;
+      --high:#e74c3c;
+      --medium:#f39c12;
+      --low:#27ae60;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;padding:0}
+    body{
+      display:flex; height:100vh; overflow:hidden; background:var(--sap-light);
+      font-family:'72','Segoe UI',sans-serif; color:var(--sap-text); font-size:14px;
+    }
+    a{color:var(--sap-blue); text-decoration:none}
+    /* Sidebar */
+    .sidebar{width:220px; background:var(--sap-dark); color:#fff; display:flex; flex-direction:column}
+    .sidebar .brand{padding:14px 16px; font-weight:700; display:flex; align-items:center; gap:8px}
+    .sidebar .brand i{font-size:18px}
+    .sidebar nav{display:flex; flex-direction:column; padding:6px 0}
+    .sidebar nav a{
+      color:#fff; padding:10px 16px; display:flex; align-items:center; gap:10px; border-left:3px solid transparent;
+    }
+    .sidebar nav a:hover{background:rgba(255,255,255,.08)}
+    .sidebar nav a.active{border-left-color:#91c8f6; background:rgba(255,255,255,.1)}
+    .sidebar .spacer{flex:1}
+    .sidebar .small{font-size:11px; color:#dce6f0; padding:10px 16px}
+    /* Topbar */
+    .topbar{height:52px; background:#fff; border-bottom:1px solid var(--sap-border); display:flex; align-items:center; padding:0 16px; gap:12px}
+    .topbar .title{font-weight:600}
+    .topbar .search{margin-left:auto; display:flex; align-items:center; gap:8px}
+    .input{
+      border:1px solid var(--sap-border); border-radius:4px; padding:7px 10px; font-size:13px; background:#fff; color:var(--sap-text)
+    }
+    .input:focus{outline:none; border-color:#91c8f6; box-shadow:0 0 0 2px rgba(145,200,246,.3)}
+    /* Content */
+    .content{flex:1; overflow-y:auto; padding:20px; min-width:0}
+    h1{margin:0 0 12px 0; font-size:18px}
+    .muted{color:var(--sap-muted)}
+    /* Buttons */
+    .btn { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:4px; font-size:13px; font-weight:500; cursor:pointer; border:none }
+    .btn-primary { background:#0070d2; color:#fff }
+    .btn-secondary { background:#fff; border:1px solid var(--sap-border); color:var(--sap-text) }
+    .btn-sm { padding:4px 10px; font-size:12px }
+    /* KPI tiles */
+    .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px }
+    .kpi-card { background:#fff; border:1px solid var(--sap-border); border-radius:6px; padding:14px 16px }
+    .kpi-card .label { font-size:11px; color:var(--sap-muted); text-transform:uppercase; letter-spacing:.4px }
+    .kpi-card .value { font-size:24px; font-weight:700; margin-top:4px; color:#003865 }
+    .kpi-card .sub   { font-size:12px; color:var(--sap-muted); margin-top:2px }
+    /* Badges */
+    .badge { display:inline-flex; align-items:center; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:500 }
+    .badge-done     { background:#eafaf1; color:#27ae60 }
+    .badge-pending  { background:#fef9e7; color:#f39c12 }
+    .badge-blocked  { background:#fdecea; color:#e74c3c }
+    .badge-progress { background:#e8f4fd; color:#0070d2 }
+    /* Tables */
+    .data-table { width:100%; border-collapse:collapse; background:#fff; border:1px solid var(--sap-border); border-radius:6px; overflow:hidden }
+    .data-table th { background:#003865; color:#fff; padding:10px 14px; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.4px; user-select:none }
+    .data-table td { padding:10px 14px; border-bottom:1px solid var(--sap-border); font-size:13px; vertical-align:top }
+    .data-table tr:hover td { background:#f8f9fb }
+    .th-sortable{cursor:pointer}
+    .th-sortable .sort-icon{margin-left:6px; opacity:.8}
+    /* Cards */
+    .card { background:#fff; border:1px solid var(--sap-border); border-radius:6px; padding:16px; margin-bottom:12px }
+    .card-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px }
+    /* Progress bars */
+    .bar-wrap { display:flex; align-items:center; gap:8px }
+    .bar-bg   { flex:1; height:8px; background:var(--sap-border); border-radius:4px; overflow:hidden; min-width:80px }
+    .bar-fill { height:100%; border-radius:4px }
+    .bar-ok   { background:#27ae60 }
+    .bar-warn { background:#f39c12 }
+    .bar-bad  { background:#e74c3c }
+    /* Alerts */
+    .alert-critical{ background:#fdecea; border-left:3px solid #e74c3c; border-radius:0 4px 4px 0; padding:8px 12px }
+    .alert-warning{  background:#fef9e7; border-left:3px solid #f39c12; border-radius:0 4px 4px 0; padding:8px 12px }
+    .alert-positive{ background:#eafaf1; border-left:3px solid #27ae60; border-radius:0 4px 4px 0; padding:8px 12px }
+    /* Empty state */
+    .empty { text-align:center; padding:48px 20px; color:var(--sap-muted) }
+    .empty i { font-size:40px; display:block; margin-bottom:12px }
+    /* Layout helpers */
+    .row{display:flex; gap:12px; align-items:center; flex-wrap:wrap}
+    .controls{display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px}
+    .right{margin-left:auto}
+    /* Filter pills */
+    .filter-pills{display:flex; gap:8px; flex-wrap:wrap}
+    .pill{
+      display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border:1px solid var(--sap-border);
+      border-radius:16px; background:#fff; color:var(--sap-text); font-size:12px; cursor:pointer
+    }
+    .pill.active{border-color:#91c8f6; background:#e8f4fd; color:var(--sap-blue)}
+    .pill i{font-size:14px}
+    /* Two-column layout for content body */
+    .grid-main{display:grid; grid-template-columns:2fr 1fr; gap:12px}
+    @media (max-width: 1000px){
+      .kpi-grid{grid-template-columns:repeat(2,1fr)}
+      .grid-main{grid-template-columns:1fr}
+    }
+    .desc{color:var(--sap-muted)}
+    .nowrap{white-space:nowrap}
+    .table-actions{white-space:nowrap}
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand"><i class="bi bi-box-seam"></i> Manager Hub</div>
+    <nav>
+      <a href="#" ><i class="bi bi-speedometer2"></i> Overview</a>
+      <a href="#" class="active"><i class="bi bi-bag"></i> SCRUM-46 — Products</a>
+      <a href="#"><i class="bi bi-receipt"></i> Orders</a>
+      <a href="#"><i class="bi bi-people"></i> Customers</a>
+      <a href="#"><i class="bi bi-gear"></i> Settings</a>
+    </nav>
+    <div class="spacer"></div>
+    <div class="small">v1.0 • Bootstrap Icons</div>
+  </aside>
+
+  <main style="flex:1; display:flex; flex-direction:column; min-width:0;">
+    <div class="topbar">
+      <span class="title">Products Catalog</span>
+      <div class="search">
+        <i class="bi bi-search"></i>
+        <input id="globalSearch" class="input" placeholder="Search products..." />
+      </div>
+    </div>
+    <div class="content">
+      <h1>SCRUM-46 — List and Retrieve Products <span class="muted">(SQLite-backed API)</span></h1>
+
+      <div class="kpi-grid" id="kpiGrid">
+        <!-- KPI tiles rendered by JS -->
+      </div>
+
+      <div class="controls">
+        <div class="filter-pills" id="categoryPills">
+          <!-- Category pills rendered by JS -->
+        </div>
+        <div class="row">
+          <button id="resetFiltersBtn" class="btn btn-secondary btn-sm"><i class="bi bi-x-circle"></i> Reset Filters</button>
+          <button id="reloadBtn" class="btn btn-primary btn-sm"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+        </div>
+      </div>
+
+      <div class="grid-main">
+        <div id="tableWrap">
+          <!-- Table or empty state -->
+        </div>
+
+        <div>
+          <div class="card">
+            <div class="row" style="justify-content:space-between">
+              <div>
+                <strong>Retrieve Product by ID</strong>
+                <div class="muted" style="font-size:12px">Simulates get_product_by_id(id)</div>
+              </div>
+            </div>
+            <div class="row" style="margin-top:10px">
+              <input id="lookupId" type="number" class="input" placeholder="Enter product ID" style="width:140px">
+              <button id="lookupBtn" class="btn btn-primary"><i class="bi bi-search"></i> Get</button>
+            </div>
+            <div id="lookupResult" style="margin-top:12px"></div>
+          </div>
+
+          <div class="card">
+            <strong>Stock Health</strong>
+            <div class="bar-wrap" style="margin-top:8px">
+              <div class="bar-bg"><div id="stockHealthBar" class="bar-fill bar-ok" style="width:0%"></div></div>
+              <span id="stockHealthText" class="muted">0%</span>
+            </div>
+            <div class="row" style="margin-top:10px; gap:16px">
+              <span class="badge badge-done"><i class="bi bi-check-circle"></i>&nbsp;In Stock</span>
+              <span class="badge badge-pending"><i class="bi bi-exclamation-circle"></i>&nbsp;Low</span>
+              <span class="badge badge-blocked"><i class="bi bi-x-circle"></i>&nbsp;Out</span>
+            </div>
+          </div>
+
+          <div class="card">
+            <strong>API Behavior</strong>
+            <div class="alert-warning" style="margin-top:10px">
+              <i class="bi bi-info-circle"></i> list_products() returns the latest committed rows. get_product_by_id(id) raises NotFoundError if the ID is missing.
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    // Sample data representing rows from SQLite 'products' table
+    const productsData = [
+      {id:1, name:"Wireless Mouse", description:"Ergonomic 2.4G wireless mouse with USB receiver", price:24.99, stock_quantity:42, category:"Electronics"},
+      {id:2, name:"Mechanical Keyboard", description:"RGB backlit with hot-swappable switches", price:89.00, stock_quantity:15, category:"Electronics"},
+      {id:3, name:"USB-C Charger 65W", description:"Fast charging PD adapter", price:39.99, stock_quantity:0, category:"Electronics"},
+      {id:4, name:"Stainless Steel Water Bottle", description:"Insulated, 24oz", price:19.95, stock_quantity:73, category:"Sports"},
+      {id:5, name:"Yoga Mat", description:"Non-slip, 6mm thick", price:25.00, stock_quantity:6, category:"Sports"},
+      {id:6, name:"Cookbook: Quick & Healthy", description:"Weeknight recipes under 30 minutes", price:17.50, stock_quantity:12, category:"Books"},
+      {id:7, name:"Nonstick Frying Pan 10\"", description:"PFOA-free, even heat distribution", price:29.90, stock_quantity:3, category:"Home & Kitchen"},
+      {id:8, name:"LED Desk Lamp", description:"Adjustable color temperature", price:34.99, stock_quantity:18, category:"Home & Kitchen"},
+      {id:9, name:"Men's Cotton T-Shirt", description:"100% cotton, classic fit", price:12.99, stock_quantity:120, category:"Apparel"},
+      {id:10, name:"Women's Running Shoes", description:"Lightweight with responsive cushioning", price:79.95, stock_quantity:9, category:"Apparel"},
+      {id:11, name:"Face Moisturizer", description:"Hydrating daily cream", price:14.49, stock_quantity:0, category:"Beauty"},
+      {id:12, name:"Noise Cancelling Headphones", description:"Over-ear, 30h battery", price:129.99, stock_quantity:5, category:"Electronics"},
+      {id:13, name:"HDMI Cable 6ft", description:"High-speed 4K", price:8.99, stock_quantity:200, category:"Electronics"},
+      {id:14, name:"Ceramic Coffee Mug", description:"12oz, microwave safe", price:9.50, stock_quantity:0, category:"Home & Kitchen"},
+      {id:15, name:"Smartphone Stand", description:"Adjustable aluminum holder", price:11.99, stock_quantity:46, category:"Electronics"},
+      {id:16, name:"Book Light", description:"Clip-on rechargeable", price:13.49, stock_quantity:22, category:"Books"},
+      {id:17, name:"Hair Dryer", description:"Ionic, 1875W", price:39.90, stock_quantity:14, category:"Beauty"},
+      {id:18, name:"Bluetooth Speaker", description:"Portable with deep bass", price:59.00, stock_quantity:2, category:"Electronics"},
+    ];
+
+    // State
+    let state = {
+      products: [...productsData], // simulate list_products()
+      category: 'All',
+      search: '',
+      sortKey: 'id',
+      sortDir: 'asc', // 'asc' or 'desc'
+    };
+
+    const currency = new Intl.NumberFormat(navigator.language || 'en-US', {style:'currency', currency:'USD', maximumFractionDigits:2});
+
+    function uniqueCategories(products){
+      const set = new Set(products.map(p => p.category || 'Uncategorized'));
+      return ['All', ...Array.from(set)];
+    }
+
+    function stockStatus(stock){
+      if (stock <= 0) return {label:'Out of stock', cls:'badge-blocked'};
+      if (stock <= 5) return {label:'Low stock', cls:'badge-pending'};
+      return {label:'In stock', cls:'badge-done'};
+    }
+
+    function computeMetrics(products){
+      const total = products.length;
+      const inStock = products.filter(p => p.stock_quantity > 0).length;
+      const outStock = products.filter(p => p.stock_quantity <= 0).length;
+      const categories = new Set(products.map(p => p.category || 'Uncategorized')).size;
+      const lowStock = products.filter(p => p.stock_quantity > 0 && p.stock_quantity <= 5).length;
+      const avgPrice = products.reduce((s,p)=>s+p.price,0)/Math.max(1,total);
+      const stockHealthPct = total ? Math.round(inStock/total*100) : 0;
+      return {total, inStock, outStock, categories, lowStock, avgPrice, stockHealthPct};
+    }
+
+    function renderKPIs(){
+      const kpi = computeMetrics(state.products);
+      const el = document.getElementById('kpiGrid');
+      el.innerHTML = `
+        <div class="kpi-card">
+          <div class="label">Total Products</div>
+          <div class="value">${kpi.total}</div>
+          <div class="sub">Avg price ${currency.format(kpi.avgPrice)}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="label">In Stock</div>
+          <div class="value">${kpi.inStock}</div>
+          <div class="sub"><span class="badge badge-done"><i class="bi bi-check-circle"></i>&nbsp;Available</span></div>
+        </div>
+        <div class="kpi-card">
+          <div class="label">Out of Stock</div>
+          <div class="value">${kpi.outStock}</div>
+          <div class="sub"><span class="badge badge-blocked"><i class="bi bi-x-circle"></i>&nbsp;Unavailable</span></div>
+        </div>
+        <div class="kpi-card">
+          <div class="label">Categories</div>
+          <div class="value">${kpi.categories}</div>
+          <div class="sub">${kpi.lowStock} low stock items</div>
+        </div>
+      `;
+      // Stock health bar
+      const bar = document.getElementById('stockHealthBar');
+      const txt = document.getElementById('stockHealthText');
+      bar.style.width = kpi.stockHealthPct + '%';
+      bar.classList.remove('bar-ok','bar-warn','bar-bad');
+      if (kpi.stockHealthPct >= 75) bar.classList.add('bar-ok');
+      else if (kpi.stockHealthPct >= 40) bar.classList.add('bar-warn');
+      else bar.classList.add('bar-bad');
+      txt.textContent = kpi.stockHealthPct + '%';
+    }
+
+    function renderCategoryPills(){
+      const pills = document.getElementById('categoryPills');
+      const cats = uniqueCategories(state.products);
+      pills.innerHTML = cats.map(cat => `
+        <span class="pill ${state.category===cat?'active':''}" data-cat="${cat}">
+          <i class="bi bi-tag"></i>${cat}
+        </span>
+      `).join('');
+      pills.querySelectorAll('.pill').forEach(p => {
+        p.addEventListener('click', () => {
+          state.category = p.getAttribute('data-cat');
+          renderTable();
+          highlightActivePill();
+        });
+      });
+    }
+
+    function highlightActivePill(){
+      document.querySelectorAll('#categoryPills .pill').forEach(el => {
+        el.classList.toggle('active', el.getAttribute('data-cat') === state.category);
+      });
+    }
+
+    function getFilteredSortedProducts(){
+      let rows = state.products.filter(p => {
+        const catOk = state.category==='All' || (p.category || 'Uncategorized')===state.category;
+        const s = state.search.trim().toLowerCase();
+        const searchOk = !s || (p.name.toLowerCase().includes(s) || (p.description||'').toLowerCase().includes(s));
+        return catOk && searchOk;
+      });
+      const dir = state.sortDir === 'asc' ? 1 : -1;
+      rows.sort((a,b)=>{
+        const key = state.sortKey;
+        let va = a[key], vb = b[key];
+        if (key==='name' || key==='category'){
+          va = (va||'').toString().toLowerCase(); vb = (vb||'').toString().toLowerCase();
+          if (va<vb) return -1*dir; if (va>vb) return 1*dir; return 0;
+        } else {
+          return (va - vb)*dir;
+        }
+      });
+      return rows;
+    }
+
+    function renderTable(){
+      const container = document.getElementById('tableWrap');
+      const rows = getFilteredSortedProducts();
+
+      if (!rows.length){
+        container.innerHTML = `
+          <div class="card empty">
+            <i class="bi bi-box"></i>
+            No products match your filters.
+            <div class="muted" style="margin-top:6px">Try resetting filters or changing your search.</div>
+          </div>
+        `;
+        return;
+      }
+
+      const header = `
+        <thead>
+          <tr>
+            ${renderTh('id','ID')}
+            ${renderTh('name','Name')}
+            ${renderTh('category','Category')}
+            ${renderTh('price','Price')}
+            ${renderTh('stock_quantity','Stock')}
+            <th>Status</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+      `;
+      const body = `
+        <tbody>
+          ${rows.map(p=>{
+            const st = stockStatus(p.stock_quantity);
+            return `
+              <tr data-id="${p.id}">
+                <td class="nowrap">#${p.id}</td>
+                <td>${p.name}</td>
+                <td>${p.category||'—'}</td>
+                <td class="nowrap">${currency.format(p.price)}</td>
+                <td class="nowrap">${p.stock_quantity}</td>
+                <td><span class="badge ${st.cls}">${st.label}</span></td>
+                <td class="desc">${p.description||''}</td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      `;
+
+      container.innerHTML = `
+        <table class="data-table">
+          ${header}
+          ${body}
+        </table>
+      `;
+
+      // Attach sort events
+      container.querySelectorAll('th.th-sortable').forEach(th=>{
+        th.addEventListener('click', ()=>{
+          const key = th.getAttribute('data-key');
+          if (state.sortKey===key){
+            state.sortDir = state.sortDir==='asc' ? 'desc' : 'asc';
+          } else {
+            state.sortKey = key;
+            state.sortDir = 'asc';
+          }
+          renderTable();
+        });
+      });
+
+      // Row click -> quick lookup detail
+      container.querySelectorAll('tbody tr').forEach(tr=>{
+        tr.addEventListener('click', ()=>{
+          const id = parseInt(tr.getAttribute('data-id'),10);
+          showLookupResultById(id);
+        });
+      });
+    }
+
+    function renderTh(key,label){
+      const active = state.sortKey===key;
+      const icon = !active ? 'bi-chevron-expand' : (state.sortDir==='asc' ? 'bi-chevron-up' : 'bi-chevron-down');
+      const sortable = ['id','name','category','price','stock_quantity'].includes(key);
+      if (!sortable) return `<th>${label}</th>`;
+      return `<th class="th-sortable" data-key="${key}">${label}<i class="bi ${icon} sort-icon"></i></th>`;
+    }
+
+    // Lookup get_product_by_id
+    function getProductById(id){
+      if (!Number.isInteger(id) || id<=0){
+        throw new Error('id must be an integer greater than 0');
+      }
+      const p = state.products.find(r => r.id===id);
+      if (!p){
+        const err = new Error(`Product with id ${id} not found`);
+        err.name = 'NotFoundError';
+        throw err;
+      }
+      return {...p}; // simulate API returning plain dict
+    }
+
+    function showLookupResultById(id){
+      const out = document.getElementById('lookupResult');
+      try{
+        const product = getProductById(id);
+        out.innerHTML = `
+          <div class="alert-positive">
+            <i class="bi bi-check-circle"></i> Found product with id ${id}
+          </div>
+          <div class="card" style="margin-top:10px; padding:12px">
+            <div class="row" style="gap:16px">
+              <span class="badge ${stockStatus(product.stock_quantity).cls}">${stockStatus(product.stock_quantity).label}</span>
+            </div>
+            <div style="margin-top:8px">
+              <div><strong>${product.name}</strong> <span class="muted">(${product.category||'—'})</span></div>
+              <div class="muted" style="margin-top:4px">${product.description||''}</div>
+              <div class="row" style="margin-top:8px">
+                <span><i class="bi bi-tag"></i> Price: ${currency.format(product.price)}</span>
+                <span><i class="bi bi-box-seam"></i> Stock: ${product.stock_quantity}</span>
+              </div>
+            </div>
+          </div>
+        `;
+        document.getElementById('lookupId').value = id;
+      }catch(err){
+        const msg = err.name==='NotFoundError' ? err.message : err.message;
+        out.innerHTML = `<div class="alert-critical"><i class="bi bi-x-octagon"></i> ${msg}</div>`;
+      }
+    }
+
+    // Event bindings
+    function bindEvents(){
+      document.getElementById('globalSearch').addEventListener('input', (e)=>{
+        state.search = e.target.value || '';
+        renderTable();
+      });
+      document.getElementById('lookupBtn').addEventListener('click', ()=>{
+        const id = parseInt(document.getElementById('lookupId').value,10);
+        showLookupResultById(id);
+      });
+      document.getElementById('resetFiltersBtn').addEventListener('click', ()=>{
+        state.category = 'All';
+        state.search = '';
+        state.sortKey = 'id';
+        state.sortDir = 'asc';
+        document.getElementById('globalSearch').value='';
+        renderTable();
+        highlightActivePill();
+      });
+      document.getElementById('reloadBtn').addEventListener('click', ()=>{
+        // Simulate reloading from DB (list_products)
+        state.products = [...productsData];
+        renderKPIs();
+        renderCategoryPills();
+        renderTable();
+      });
+    }
+
+    // Init
+    (function init(){
+      renderKPIs();
+      renderCategoryPills();
+      renderTable();
+      bindEvents();
+      // Default lookup for demo
+      showLookupResultById(1);
+    })();
+  </script>
+</body>
+</html>
