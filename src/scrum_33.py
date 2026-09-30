@@ -188,10 +188,10 @@ def _contains_null(s: str) -> bool:
 
 
 def _validate_name(name: str) -> None:
+    if name is None:
+        raise ValueError("Name is required.")
     if not isinstance(name, str):
         raise ValueError("Name must be a string.")
-    if _is_blank(name):
-        raise ValueError("Name is required.")
     n = name.strip()
     if len(n) == 0:
         raise ValueError("Name cannot be empty.")
@@ -202,10 +202,10 @@ def _validate_name(name: str) -> None:
 
 
 def _validate_username(username: str) -> None:
+    if username is None:
+        raise ValueError("Username is required.")
     if not isinstance(username, str):
         raise ValueError("Username must be a string.")
-    if _is_blank(username):
-        raise ValueError("Username is required.")
     u = username.strip()
     if len(u) == 0:
         raise ValueError("Username cannot be empty.")
@@ -319,7 +319,7 @@ class CredentialStore:
         return "Credential saved successfully."
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(storage_path={str(self._storage_path)!r})"
+        return f"{self.__class__.__name__}(storage_path={self._storage_path})"
 
 
 def create_store_from_env(env_var: str = "CREDENTIAL_STORE_SECRET", storage_path: Union[str, os.PathLike[str], Path] = DEFAULT_STORE_FILE) -> CredentialStore:
