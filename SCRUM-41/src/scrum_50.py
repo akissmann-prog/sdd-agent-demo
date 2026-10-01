@@ -214,13 +214,8 @@ class pricing:
     def ensure_price_configuration(cls, conn: sqlite3.Connection) -> None:
         """
         Detect and set the price storage configuration from the schema for the current thread.
-        Idempotent per-thread.
+        Always re-evaluates for the provided connection to match its schema.
         """
-        mode = getattr(cls._local, "storage_mode", None)
-        col = getattr(cls._local, "price_column", None)
-        if mode is not None and col is not None:
-            return
-
         try:
             cursor = conn.execute("PRAGMA table_info(products)")
             rows = cursor.fetchall()
