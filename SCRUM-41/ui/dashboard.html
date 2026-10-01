@@ -1,0 +1,1791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Product Catalog</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    :root{
+      --sap-dark:#003865; --sap-blue:#0070d2; --sap-light:#f5f6fa;
+      --sap-border:#d1d8e0; --sap-text:#32363a; --sap-muted:#6e7a8a;
+      --high:#e74c3c; --medium:#f39c12; --low:#27ae60;
+    }
+    *{box-sizing:border-box; margin:0; padding:0}
+    body{display:flex; height:100vh; overflow:hidden; background:var(--sap-light); font-family:'72','Segoe UI',sans-serif; color:var(--sap-text); font-size:14px}
+    a{color:var(--sap-blue); text-decoration:none}
+    /* Sidebar */
+    #sidebar{width:220px; background:var(--sap-dark); color:#fff; display:flex; flex-direction:column; flex-shrink:0}
+    #sidebar .brand{padding:16px; font-weight:700; font-size:15px; display:flex; align-items:center; gap:8px; border-bottom:1px solid rgba(255,255,255,.1)}
+    #sidebar nav{display:flex; flex-direction:column; padding:8px 0; flex:1}
+    #sidebar nav a{color:rgba(255,255,255,.75); padding:10px 18px; display:flex; align-items:center; gap:10px; border-left:3px solid transparent; font-size:13px; transition:all .15s; cursor:pointer}
+    #sidebar nav a:hover{background:rgba(255,255,255,.05); color:#fff}
+    #sidebar nav a.active{color:#fff; border-left-color:#91c8f6; background:rgba(255,255,255,.1)}
+    #sidebar .sidebar-footer{padding:12px 16px; font-size:11px; color:rgba(255,255,255,.4)}
+    /* Main */
+    #main{flex:1; display:flex; flex-direction:column; min-width:0; overflow:hidden}
+    #topbar{height:52px; background:#fff; border-bottom:1px solid var(--sap-border); display:flex; align-items:center; padding:0 20px; gap:12px; flex-shrink:0}
+    #topbar-title{font-weight:600; font-size:15px}
+    #content{flex:1; overflow-y:auto; padding:20px}
+    /* Sections */
+    .section{display:none}
+    .section.active{display:block}
+    /* Buttons */
+    .btn{display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:4px; font-size:13px; font-weight:500; cursor:pointer; border:none; font-family:inherit}
+    .btn-primary{background:var(--sap-blue); color:#fff} .btn-primary:hover{background:#005fb3}
+    .btn-secondary{background:#fff; border:1px solid var(--sap-border); color:var(--sap-text)}
+    .btn-danger{background:var(--high); color:#fff}
+    .btn-sm{padding:4px 10px; font-size:12px}
+    /* KPI */
+    .kpi-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px}
+    .kpi-card{background:#fff; border:1px solid var(--sap-border); border-radius:6px; padding:14px 16px}
+    .kpi-card .label{font-size:11px; color:var(--sap-muted); text-transform:uppercase; letter-spacing:.4px}
+    .kpi-card .value{font-size:24px; font-weight:700; margin-top:4px; color:var(--sap-dark)}
+    .kpi-card .sub{font-size:12px; color:var(--sap-muted); margin-top:2px}
+    /* Badges */
+    .badge{display:inline-flex; align-items:center; gap:3px; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:500}
+    .badge-done{background:#eafaf1; color:#27ae60} .badge-pending{background:#fef9e7; color:#f39c12}
+    .badge-blocked{background:#fdecea; color:#e74c3c} .badge-progress{background:#e8f4fd; color:#0070d2}
+    .badge-warning{background:#fef9e7; color:#f39c12}
+    /* Table */
+    .data-table{width:100%; border-collapse:collapse; background:#fff; border:1px solid var(--sap-border); border-radius:6px; overflow:hidden}
+    .data-table th{background:var(--sap-dark); color:#fff; padding:10px 14px; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.4px; user-select:none}
+    .data-table td{padding:10px 14px; border-bottom:1px solid var(--sap-border); font-size:13px}
+    .data-table tr:last-child td{border-bottom:none}
+    .data-table tr:hover td{background:#f8f9fb}
+    .th-sortable{cursor:pointer}
+    /* Cards */
+    .card{background:#fff; border:1px solid var(--sap-border); border-radius:6px; padding:16px; margin-bottom:12px}
+    .card-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px}
+    /* Progress bars */
+    .bar-wrap{display:flex; align-items:center; gap:8px}
+    .bar-bg{flex:1; height:8px; background:var(--sap-border); border-radius:4px; overflow:hidden; min-width:60px}
+    .bar-fill{height:100%; border-radius:4px}
+    .bar-ok{background:#27ae60} .bar-warn{background:#f39c12} .bar-bad{background:#e74c3c}
+    /* Alerts */
+    .alert-critical{background:#fdecea; border-left:3px solid var(--high); border-radius:0 4px 4px 0; padding:8px 12px; margin-bottom:8px}
+    .alert-warning{background:#fef9e7; border-left:3px solid var(--medium); border-radius:0 4px 4px 0; padding:8px 12px; margin-bottom:8px}
+    .alert-positive{background:#eafaf1; border-left:3px solid var(--low); border-radius:0 4px 4px 0; padding:8px 12px; margin-bottom:8px}
+    /* Filters */
+    .filter-pills{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px}
+    .pill{display:inline-flex; align-items:center; gap:5px; padding:5px 12px; border:1px solid var(--sap-border); border-radius:16px; background:#fff; color:var(--sap-muted); font-size:12px; cursor:pointer}
+    .pill.active{background:var(--sap-dark); color:#fff; border-color:var(--sap-dark)}
+    /* Layout helpers */
+    .row{display:flex; align-items:center; gap:12px; flex-wrap:wrap}
+    .controls{display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; flex-wrap:wrap}
+    .right{margin-left:auto}
+    .grid-2{display:grid; grid-template-columns:2fr 1fr; gap:16px}
+    .grid-4{display:grid; grid-template-columns:repeat(4,1fr); gap:12px}
+    .section-title{font-size:18px; font-weight:600; color:var(--sap-dark); margin-bottom:4px}
+    .section-sub{font-size:13px; color:var(--sap-muted); margin-bottom:20px}
+    /* Empty */
+    .empty{text-align:center; padding:48px 20px; color:var(--sap-muted)}
+    .empty i{font-size:40px; display:block; margin-bottom:12px}
+    @media(max-width:1100px){.kpi-grid{grid-template-columns:repeat(2,1fr)} .grid-2{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <aside id="sidebar">
+    <div class="brand"><i class="bi bi-box-seam"></i> Product Catalog</div>
+    <nav>
+      <a data-sec="SCRUM-42"><i class="bi bi-plus-circle"></i> Create products</a>
+      <a data-sec="SCRUM-46"><i class="bi bi-table"></i> List and retrieve products</a>
+      <a data-sec="SCRUM-50"><i class="bi bi-pencil-square"></i> Update existing products</a>
+      <a data-sec="SCRUM-54"><i class="bi bi-trash"></i> Delete products</a>
+    </nav>
+    <div class="sidebar-footer">SCRUM-41 &bull; SDD Pipeline</div>
+  </aside>
+
+  <div id="main">
+    <div id="topbar">
+      <span id="topbar-title">Create products</span>
+      <div style="margin-left:auto; display:flex; gap:8px" id="topbar-actions"></div>
+    </div>
+    <div id="content">
+      <div class="section" id="section-SCRUM-42">
+<div class="row controls">
+  <div>
+    <h3><i class="bi bi-box-seam"></i> Product Creator</h3>
+  </div>
+  <div class="right">
+    <div style="display:flex; gap:12px; align-items:center;">
+      <i class="bi bi-funnel"></i>
+      <div id="scrum42-category-pills" class="filter-pills" aria-label="Category filters"></div>
+      <div id="scrum42-stock-pills" class="filter-pills" aria-label="Stock filters"></div>
+      <div style="display:flex; align-items:center; gap:6px;">
+        <i class="bi bi-search"></i>
+        <input id="scrum42-search" type="search" placeholder="Search name or category" />
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="kpi-grid" id="scrum42-kpis">
+  <div class="kpi-card">
+    <div class="label">Total Products</div>
+    <div class="value" id="scrum42-kpi-total">0</div>
+    <div class="sub"><span class="badge badge-progress">Catalog</span></div>
+  </div>
+  <div class="kpi-card">
+    <div class="label">In Stock</div>
+    <div class="value" id="scrum42-kpi-instock">0</div>
+    <div class="sub"><span class="badge badge-done">Ready to ship</span></div>
+  </div>
+  <div class="kpi-card">
+    <div class="label">Low Stock</div>
+    <div class="value" id="scrum42-kpi-low">0</div>
+    <div class="sub"><span class="badge badge-warning">Reorder soon</span></div>
+  </div>
+  <div class="kpi-card">
+    <div class="label">Out of Stock</div>
+    <div class="value" id="scrum42-kpi-oos">0</div>
+    <div class="sub"><span class="badge badge-blocked">Attention</span></div>
+  </div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <h4 style="margin-top:0;"><i class="bi bi-plus-circle"></i> Create New Product</h4>
+
+    <div id="scrum42-alert-success" class="alert-positive" hidden>
+      <i class="bi bi-check-circle"></i> <span id="scrum42-success-text">Product created.</span>
+    </div>
+    <div id="scrum42-alert-error" class="alert-critical" hidden>
+      <i class="bi bi-exclamation-triangle"></i>
+      <span>Could not create product:</span>
+      <ul id="scrum42-error-list" style="margin:6px 0 0 18px;"></ul>
+    </div>
+
+    <form id="scrum42-form" autocomplete="off">
+      <div class="row" style="gap:10px; flex-wrap:wrap;">
+        <div style="flex:1 1 240px; min-width:220px;">
+          <label for="scrum42-name">Name</label>
+          <input id="scrum42-name" type="text" placeholder="e.g., Wireless Mouse" required />
+        </div>
+        <div style="flex:1 1 160px; min-width:160px;">
+          <label for="scrum42-category">Category</label>
+          <input id="scrum42-category" type="text" placeholder="e.g., Electronics" required />
+        </div>
+      </div>
+
+      <div class="row" style="gap:10px; flex-wrap:wrap; margin-top:8px;">
+        <div style="flex:1 1 160px; min-width:160px;">
+          <label for="scrum42-price">Price</label>
+          <input id="scrum42-price" type="number" step="0.01" min="0" placeholder="0.00" required />
+        </div>
+        <div style="flex:1 1 160px; min-width:160px;">
+          <label for="scrum42-stock">Stock Quantity</label>
+          <input id="scrum42-stock" type="number" step="1" min="0" placeholder="0" required />
+        </div>
+      </div>
+
+      <div style="margin-top:8px;">
+        <label for="scrum42-description">Description</label>
+        <textarea id="scrum42-description" rows="3" placeholder="Brief description of the product" required></textarea>
+      </div>
+
+      <div class="row" style="justify-content:flex-end; margin-top:12px;">
+        <div class="right">
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-save"></i> Create Product
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h4 style="margin-top:0;"><i class="bi bi-info-circle"></i> Validation & Behavior</h4>
+    <ul style="margin:0 0 10px 18px;">
+      <li>All fields are required.</li>
+      <li>Name, Description, Category must be non-empty text.</li>
+      <li>Price must be a non-negative number.</li>
+      <li>Stock Quantity must be a non-negative integer.</li>
+    </ul>
+    <p style="margin:0;">
+      On success, a new product is added to the catalog with a generated ID and displayed in the table. Sorting, filtering, and search update live.
+    </p>
+  </div>
+</div>
+
+<div class="card">
+  <div class="row controls" style="align-items:center;">
+    <div>
+      <strong>Catalog</strong>
+      <span id="scrum42-result-count" style="margin-left:8px;" class="badge badge-progress">0 results</span>
+    </div>
+    <div class="right">
+      <button id="scrum42-reset-filters" class="btn btn-secondary btn-sm">
+        <i class="bi bi-x-circle"></i> Reset filters
+      </button>
+    </div>
+  </div>
+
+  <table class="data-table" id="scrum42-table">
+    <thead>
+      <tr>
+        <th class="th-sortable" data-key="id">ID</th>
+        <th class="th-sortable" data-key="name">Name</th>
+        <th class="th-sortable" data-key="category">Category</th>
+        <th class="th-sortable" data-key="price">Price</th>
+        <th class="th-sortable" data-key="stock_quantity">Stock</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody id="scrum42-tbody">
+      <tr><td colspan="6"><div class="empty"><i class="bi bi-inboxes"></i> <text>No products</text></div></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+(function(){
+  // ---------- State ----------
+  const scrum42State = {
+    products: [
+      { id: 101, name: "Wireless Mouse", description: "2.4GHz ergonomic mouse with nano receiver", price: 19.99, stock_quantity: 35, category: "Electronics" },
+      { id: 102, name: "Cotton T-Shirt", description: "100% cotton crew neck tee", price: 9.99, stock_quantity: 5, category: "Apparel" },
+      { id: 103, name: "Vacuum Cleaner", description: "Bagless upright vacuum 1200W", price: 129.99, stock_quantity: 0, category: "Home" },
+      { id: 104, name: "Notebook A5", description: "Lined paper notebook, 200 pages", price: 3.49, stock_quantity: 55, category: "Books" },
+      { id: 105, name: "USB-C Cable 1m", description: "Fast charging USB-C cable", price: 6.49, stock_quantity: 9, category: "Electronics" },
+      { id: 106, name: "Gaming Chair", description: "Adjustable lumbar support, PU leather", price: 199.00, stock_quantity: 2, category: "Home" },
+      { id: 107, name: "Bluetooth Speaker", description: "Portable IPX5 waterproof speaker", price: 39.95, stock_quantity: 18, category: "Electronics" },
+      { id: 108, name: "Denim Jacket", description: "Classic fit denim jacket", price: 59.00, stock_quantity: 0, category: "Apparel" },
+      { id: 109, name: "Ceramic Mug", description: "350ml ceramic mug, matte finish", price: 8.50, stock_quantity: 12, category: "Home" },
+      { id: 110, name: "Fantasy Novel", description: "Bestselling epic fantasy paperback", price: 14.99, stock_quantity: 7, category: "Books" }
+    ],
+    filters: {
+      category: "All",
+      stock: "ALL",
+      search: ""
+    },
+    sort: {
+      key: "id",
+      dir: "asc" // or 'desc'
+    }
+  };
+
+  // ---------- Utils ----------
+  function scrum42_status(p) {
+    if (p.stock_quantity === 0) return "OUT";
+    if (p.stock_quantity < 10) return "LOW";
+    return "IN";
+  }
+  function scrum42_badgeForStatus(st) {
+    if (st === "OUT") return '<span class="badge badge-blocked">Out of Stock</span>';
+    if (st === "LOW") return '<span class="badge badge-warning">Low Stock</span>';
+    return '<span class="badge badge-done">In Stock</span>';
+  }
+  function scrum42_currency(n) {
+    return "$" + (Math.round(n * 100) / 100).toFixed(2);
+  }
+  function scrum42_compare(a, b, key, dir) {
+    let va = a[key], vb = b[key];
+    if (typeof va === "string") va = va.toLowerCase();
+    if (typeof vb === "string") vb = vb.toLowerCase();
+    if (va < vb) return dir === "asc" ? -1 : 1;
+    if (va > vb) return dir === "asc" ? 1 : -1;
+    return 0;
+  }
+  function scrum42_uniqueCategories() {
+    const set = new Set(scrum42State.products.map(p => p.category));
+    return ["All", ...Array.from(set).sort()];
+  }
+
+  // ---------- Rendering ----------
+  function scrum42_renderKPIs(list) {
+    const total = list.length;
+    const inStock = list.filter(p => scrum42_status(p) === "IN").length;
+    const low = list.filter(p => scrum42_status(p) === "LOW").length;
+    const out = list.filter(p => scrum42_status(p) === "OUT").length;
+    document.getElementById("scrum42-kpi-total").textContent = String(total);
+    document.getElementById("scrum42-kpi-instock").textContent = String(inStock);
+    document.getElementById("scrum42-kpi-low").textContent = String(low);
+    document.getElementById("scrum42-kpi-oos").textContent = String(out);
+  }
+
+  function scrum42_renderFilters() {
+    // Categories
+    const catWrap = document.getElementById("scrum42-category-pills");
+    catWrap.innerHTML = "";
+    scrum42_uniqueCategories().forEach(cat => {
+      const pill = document.createElement("span");
+      pill.className = "pill" + (scrum42State.filters.category === cat ? " active" : "");
+      pill.dataset.filter = "cat:" + cat;
+      pill.textContent = cat;
+      catWrap.appendChild(pill);
+    });
+    // Stock
+    const stockWrap = document.getElementById("scrum42-stock-pills");
+    stockWrap.innerHTML = "";
+    const stockDefs = [
+      {key:"ALL", label:"All"},
+      {key:"IN", label:"In Stock"},
+      {key:"LOW", label:"Low Stock"},
+      {key:"OUT", label:"Out of Stock"}
+    ];
+    stockDefs.forEach(s => {
+      const pill = document.createElement("span");
+      pill.className = "pill" + (scrum42State.filters.stock === s.key ? " active" : "");
+      pill.dataset.filter = "stock:" + s.key;
+      pill.textContent = s.label;
+      stockWrap.appendChild(pill);
+    });
+  }
+
+  function scrum42_filtered() {
+    const f = scrum42State.filters;
+    return scrum42State.products.filter(p => {
+      if (f.category !== "All" && p.category !== f.category) return false;
+      if (f.stock !== "ALL" && scrum42_status(p) !== f.stock) return false;
+      if (f.search) {
+        const q = f.search.toLowerCase();
+        const hay = (p.name + " " + p.category).toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }
+
+  function scrum42_renderTable() {
+    const tbody = document.getElementById("scrum42-tbody");
+    const list = scrum42_filtered().slice().sort((a,b) => scrum42_compare(a,b,scrum42State.sort.key, scrum42State.sort.dir));
+    // Header sort indicators
+    const headers = {
+      id: "ID",
+      name: "Name",
+      category: "Category",
+      price: "Price",
+      stock_quantity: "Stock"
+    };
+    const thead = document.querySelector("#scrum42-table thead tr");
+    Array.from(thead.children).forEach(th => {
+      const key = th.getAttribute("data-key");
+      if (!key) return;
+      const active = (key === scrum42State.sort.key);
+      const icon = active ? (scrum42State.sort.dir === "asc" ? ' <i class="bi bi-sort-up"></i>' : ' <i class="bi bi-sort-down"></i>') : ' <i class="bi bi-arrow-down-up"></i>';
+      th.innerHTML = headers[key] + icon;
+      th.classList.add("th-sortable");
+      th.setAttribute("data-key", key);
+    });
+
+    document.getElementById("scrum42-result-count").textContent = list.length + " results";
+    if (list.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6"><div class="empty"><i class="bi bi-search"></i> <text>No matching products</text></div></td></tr>';
+      scrum42_renderKPIs(list);
+      return;
+    }
+
+    const rows = list.map(p => {
+      const st = scrum42_status(p);
+      return `
+        <tr>
+          <td>${p.id}</td>
+          <td>${p.name}</td>
+          <td>${p.category}</td>
+          <td>${scrum42_currency(p.price)}</td>
+          <td>${p.stock_quantity}</td>
+          <td title="${st === "IN" ? "Sufficient stock" : st === "LOW" ? "Low stock" : "Out of stock"}">
+            ${scrum42_badgeForStatus(st)}
+          </td>
+        </tr>
+      `;
+    }).join("");
+    tbody.innerHTML = rows;
+    scrum42_renderKPIs(list);
+  }
+
+  function scrum42_render() {
+    scrum42_renderFilters();
+    scrum42_renderTable();
+  }
+
+  // ---------- Validation & Create ----------
+  function scrum42_validate(fields) {
+    const errors = [];
+    const name = String(fields.name ?? "").trim();
+    if (!name) errors.push("name is required and cannot be empty.");
+    const description = String(fields.description ?? "").trim();
+    if (!description) errors.push("description is required and cannot be empty.");
+    const category = String(fields.category ?? "").trim();
+    if (!category) errors.push("category is required and cannot be empty.");
+
+    let price = fields.price;
+    if (price === "" || price === null || price === undefined) {
+      errors.push("price is required and must be a non-negative number.");
+    } else {
+      if (typeof price === "string") price = price.trim();
+      const f = Number(price);
+      if (!isFinite(f) || isNaN(f) || f < 0) {
+        errors.push("price must be a non-negative number.");
+      } else {
+        fields.price = f;
+      }
+    }
+
+    let stock = fields.stock_quantity;
+    if (stock === "" || stock === null || stock === undefined) {
+      errors.push("stock_quantity is required and must be a non-negative integer.");
+    } else {
+      if (typeof stock === "string") stock = stock.trim();
+      const i = Number(stock);
+      if (!Number.isInteger(i) || i < 0) {
+        errors.push("stock_quantity must be a non-negative integer.");
+      } else {
+        fields.stock_quantity = i;
+      }
+    }
+
+    return { ok: errors.length === 0, errors };
+  }
+
+  function scrum42_createProduct(fields) {
+    // Simulate DB insertion and ID generation
+    const maxId = scrum42State.products.reduce((m, p) => Math.max(m, p.id), 0);
+    const newProduct = {
+      id: maxId + 1,
+      name: fields.name.trim(),
+      description: fields.description.trim(),
+      price: fields.price,
+      stock_quantity: fields.stock_quantity,
+      category: fields.category.trim()
+    };
+    scrum42State.products.push(newProduct);
+    return { ok: true, product: newProduct };
+  }
+
+  // ---------- Event Handlers ----------
+  function scrum42_bindEvents() {
+    // Filters click (event delegation)
+    document.getElementById("scrum42-category-pills").addEventListener("click", (e) => {
+      const t = e.target.closest(".pill[data-filter]");
+      if (!t) return;
+      const [, cat] = t.dataset.filter.split(":");
+      scrum42State.filters.category = cat;
+      scrum42_render();
+    });
+    document.getElementById("scrum42-stock-pills").addEventListener("click", (e) => {
+      const t = e.target.closest(".pill[data-filter]");
+      if (!t) return;
+      const [, st] = t.dataset.filter.split(":");
+      scrum42State.filters.stock = st;
+      scrum42_render();
+    });
+    // Search
+    document.getElementById("scrum42-search").addEventListener("input", (e) => {
+      scrum42State.filters.search = e.target.value.trim();
+      scrum42_renderTable();
+    });
+    // Sorting
+    document.querySelector("#scrum42-table thead").addEventListener("click", (e) => {
+      const th = e.target.closest(".th-sortable[data-key]");
+      if (!th) return;
+      const key = th.getAttribute("data-key");
+      if (scrum42State.sort.key === key) {
+        scrum42State.sort.dir = scrum42State.sort.dir === "asc" ? "desc" : "asc";
+      } else {
+        scrum42State.sort.key = key;
+        scrum42State.sort.dir = "asc";
+      }
+      scrum42_renderTable();
+    });
+    // Reset filters
+    document.getElementById("scrum42-reset-filters").addEventListener("click", () => {
+      scrum42State.filters = { category: "All", stock: "ALL", search: "" };
+      document.getElementById("scrum42-search").value = "";
+      scrum42_render();
+    });
+    // Form submit
+    document.getElementById("scrum42-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      // Hide alerts
+      scrum42_toggleAlert("success", false);
+      scrum42_toggleAlert("error", false);
+
+      const fields = {
+        name: document.getElementById("scrum42-name").value,
+        description: document.getElementById("scrum42-description").value,
+        price: document.getElementById("scrum42-price").value,
+        stock_quantity: document.getElementById("scrum42-stock").value,
+        category: document.getElementById("scrum42-category").value
+      };
+      const v = scrum42_validate(fields);
+      if (!v.ok) {
+        const ul = document.getElementById("scrum42-error-list");
+        ul.innerHTML = v.errors.map(err => `<li>${err}</li>`).join("");
+        scrum42_toggleAlert("error", true);
+        return;
+      }
+      const res = scrum42_createProduct(fields);
+      if (res.ok) {
+        // Clear form
+        document.getElementById("scrum42-form").reset();
+        // Update UI
+        scrum42_render();
+        // Show success
+        document.getElementById("scrum42-success-text").textContent = `Product #${res.product.id} "${res.product.name}" created.`;
+        scrum42_toggleAlert("success", true);
+      } else {
+        const ul = document.getElementById("scrum42-error-list");
+        ul.innerHTML = `<li>${res.error?.message || "Unknown error"}</li>`;
+        scrum42_toggleAlert("error", true);
+      }
+    });
+  }
+
+  function scrum42_toggleAlert(type, show) {
+    const id = type === "success" ? "scrum42-alert-success" : "scrum42-alert-error";
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (show) el.removeAttribute("hidden");
+    else el.setAttribute("hidden", "hidden");
+  }
+
+  // ---------- Bootstrap ----------
+  function scrum42_init() {
+    scrum42_bindEvents();
+    scrum42_render();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", scrum42_init, { once: true });
+  } else {
+    scrum42_init();
+  }
+})();
+</script>
+      </div>
+      <div class="section" id="section-SCRUM-46">
+<div class="row controls">
+  <div>
+    <div class="filter-pills" id="scrum46-cat-filters" title="Filter by category">
+      <span class="pill active" data-filter="all"><i class="bi bi-ui-checks-grid"></i> All Categories</span>
+      <span class="pill" data-filter="Electronics">Electronics</span>
+      <span class="pill" data-filter="Accessories">Accessories</span>
+      <span class="pill" data-filter="Home">Home</span>
+      <span class="pill" data-filter="Apparel">Apparel</span>
+    </div>
+    <div class="filter-pills" id="scrum46-stock-filters" title="Filter by stock status" style="margin-top:8px">
+      <span class="pill active" data-filter="all"><i class="bi bi-layers"></i> Any Stock</span>
+      <span class="pill" data-filter="in"><i class="bi bi-check-circle"></i> In Stock</span>
+      <span class="pill" data-filter="low"><i class="bi bi-exclamation-circle"></i> Low</span>
+      <span class="pill" data-filter="out"><i class="bi bi-x-circle"></i> Out</span>
+    </div>
+  </div>
+  <div class="right">
+    <div class="controls">
+      <input type="number" min="1" id="scrum46-lookup-id" placeholder="Product ID" />
+      <button class="btn btn-primary btn-sm" id="scrum46-lookup-btn"><i class="bi bi-search"></i> Retrieve</button>
+    </div>
+  </div>
+</div>
+
+<div class="kpi-grid" id="scrum46-kpis">
+  <div class="kpi-card">
+    <div class="label">Products</div>
+    <div class="value" id="scrum46-kpi-count">0</div>
+    <div class="sub"><i class="bi bi-funnel"></i> filtered</div>
+  </div>
+  <div class="kpi-card">
+    <div class="label">In Stock</div>
+    <div class="value" id="scrum46-kpi-in">0</div>
+    <div class="sub"><span class="badge badge-done">available</span></div>
+  </div>
+  <div class="kpi-card">
+    <div class="label">Low / Out</div>
+    <div class="value" id="scrum46-kpi-lowout">0</div>
+    <div class="sub"><span class="badge badge-warning">attention</span></div>
+  </div>
+  <div class="kpi-card">
+    <div class="label">Avg Price</div>
+    <div class="value" id="scrum46-kpi-avg">$0.00</div>
+    <div class="sub">current view</div>
+  </div>
+</div>
+
+<div id="scrum46-detail"></div>
+
+<table class="data-table" id="scrum46-table">
+  <thead>
+    <tr>
+      <th class="th-sortable" data-key="id">ID</th>
+      <th class="th-sortable" data-key="name">Name</th>
+      <th class="th-sortable" data-key="category">Category</th>
+      <th class="th-sortable" data-key="price">Price</th>
+      <th class="th-sortable" data-key="stock_quantity">Stock</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody id="scrum46-tbody"></tbody>
+</table>
+
+<div id="scrum46-empty" class="empty" style="display:none">
+  <i class="bi bi-inbox"></i>
+  <text>No products match the current filters.</text>
+</div>
+
+<script>
+  // Data and state
+  const scrum46_products = [
+    { id: 1,  name: "Wireless Mouse", description: "2.4GHz ergonomic mouse with silent clicks", price: 24.99, stock_quantity: 58, category: "Accessories" },
+    { id: 2,  name: "Mechanical Keyboard", description: "Backlit brown-switch keyboard", price: 89.99, stock_quantity: 12, category: "Accessories" },
+    { id: 3,  name: "27\" 4K Monitor", description: "IPS panel, HDR10, 60Hz", price: 329.0, stock_quantity: 7, category: "Electronics" },
+    { id: 4,  name: "USB-C Hub 7-in-1", description: "HDMI, PD, SD, 3xUSB 3.0", price: 39.95, stock_quantity: 0, category: "Electronics" },
+    { id: 5,  name: "Noise-Cancelling Headphones", description: "Over-ear ANC, 30h battery", price: 199.0, stock_quantity: 21, category: "Electronics" },
+    { id: 6,  name: "Laptop Stand", description: "Aluminum, adjustable height", price: 29.5, stock_quantity: 45, category: "Home" },
+    { id: 7,  name: "Webcam 1080p", description: "Auto light correction, dual mic", price: 49.0, stock_quantity: 3, category: "Electronics" },
+    { id: 8,  name: "Portable SSD 1TB", description: "USB 3.2 Gen2, 1050MB/s", price: 119.0, stock_quantity: 0, category: "Electronics" },
+    { id: 9,  name: "Graphic Tee", description: "100% cotton, unisex", price: 19.0, stock_quantity: 150, category: "Apparel" },
+    { id: 10, name: "Ceramic Mug", description: "12oz, dishwasher safe", price: 12.0, stock_quantity: 34, category: "Home" },
+    { id: 11, name: "Desk Lamp LED", description: "Dimmable, 5 color modes", price: 35.0, stock_quantity: 9, category: "Home" },
+    { id: 12, name: "Ethernet Cable 10m", description: "Cat6, snagless", price: 14.0, stock_quantity: 78, category: "Accessories" }
+  ];
+
+  const scrum46_root = document.getElementById('section-SCRUM-46');
+
+  const scrum46State = {
+    products: scrum46_products.slice(),
+    filters: { category: 'all', stock: 'all' },
+    sort: { key: 'id', dir: 'asc' },
+    detailId: null
+  };
+
+  // Utilities
+  function scrum46_currency(v) {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(v);
+  }
+
+  function scrum46_statusOf(stock) {
+    if (stock === 0) return { key: 'out', label: 'Out of stock', badgeClass: 'badge-blocked' };
+    if (stock <= 10) return { key: 'low', label: 'Low stock', badgeClass: 'badge-warning' };
+    return { key: 'in', label: 'In stock', badgeClass: 'badge-done' };
+  }
+
+  function scrum46_listProducts() {
+    // Simulates API list_products()
+    return scrum46State.products.slice();
+  }
+
+  function scrum46_getProductById(id) {
+    // Simulates API get_product_by_id(id)
+    const p = scrum46State.products.find(x => x.id === id);
+    if (!p) {
+      const err = new Error("Product not found");
+      err.name = "NotFoundError";
+      throw err;
+    }
+    return { ...p };
+  }
+
+  // Rendering
+  function scrum46_render() {
+    const filtered = scrum46_applyFilters(scrum46_listProducts());
+    const sorted = scrum46_applySort(filtered);
+    scrum46_renderKPIs(sorted);
+    scrum46_renderTable(sorted);
+    scrum46_updateSortIndicators();
+  }
+
+  function scrum46_applyFilters(list) {
+    let out = list;
+    const f = scrum46State.filters;
+
+    if (f.category !== 'all') {
+      out = out.filter(p => (p.category || '') === f.category);
+    }
+
+    if (f.stock !== 'all') {
+      out = out.filter(p => scrum46_statusOf(p.stock_quantity).key === f.stock);
+    }
+
+    return out;
+  }
+
+  function scrum46_applySort(list) {
+    const { key, dir } = scrum46State.sort;
+    const copy = list.slice();
+    copy.sort((a, b) => {
+      const va = a[key];
+      const vb = b[key];
+      let cmp = 0;
+      if (typeof va === 'number' && typeof vb === 'number') {
+        cmp = va - vb;
+      } else {
+        cmp = String(va).localeCompare(String(vb));
+      }
+      return dir === 'asc' ? cmp : -cmp;
+    });
+    return copy;
+  }
+
+  function scrum46_renderKPIs(list) {
+    const count = list.length;
+    const inCount = list.filter(p => scrum46_statusOf(p.stock_quantity).key === 'in').length;
+    const lowOut = list.filter(p => {
+      const k = scrum46_statusOf(p.stock_quantity).key;
+      return k === 'low' || k === 'out';
+    }).length;
+    const avgPrice = count ? (list.reduce((s, p) => s + p.price, 0) / count) : 0;
+
+    const countEl = document.getElementById('scrum46-kpi-count');
+    const inEl = document.getElementById('scrum46-kpi-in');
+    const loEl = document.getElementById('scrum46-kpi-lowout');
+    const avgEl = document.getElementById('scrum46-kpi-avg');
+
+    if (countEl) countEl.textContent = String(count);
+    if (inEl) inEl.textContent = String(inCount);
+    if (loEl) loEl.textContent = String(lowOut);
+    if (avgEl) avgEl.textContent = scrum46_currency(avgPrice);
+  }
+
+  function scrum46_renderTable(list) {
+    const tbody = document.getElementById('scrum46-tbody');
+    const empty = document.getElementById('scrum46-empty');
+    if (!tbody) return;
+
+    if (!list.length) {
+      tbody.innerHTML = "";
+      if (empty) empty.style.display = '';
+      return;
+    } else {
+      if (empty) empty.style.display = 'none';
+    }
+
+    tbody.innerHTML = list.map(p => {
+      const st = scrum46_statusOf(p.stock_quantity);
+      return `
+        <tr data-id="${p.id}">
+          <td>${p.id}</td>
+          <td><i class="bi bi-box-seam"></i> ${p.name}</td>
+          <td>${p.category || ''}</td>
+          <td>${scrum46_currency(p.price)}</td>
+          <td>${p.stock_quantity}</td>
+          <td><span class="badge ${st.badgeClass}">${st.label}</span></td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  function scrum46_updateSortIndicators() {
+    const thead = document.querySelector('#scrum46-table thead');
+    if (!thead) return;
+    const { key, dir } = scrum46State.sort;
+
+    thead.querySelectorAll('th.th-sortable').forEach(th => {
+      // Remove any existing icon we added
+      const oldIcon = th.querySelector('i[data-scrum46-sort]');
+      if (oldIcon) oldIcon.remove();
+
+      const k = th.getAttribute('data-key');
+      if (k === key) {
+        const icon = document.createElement('i');
+        icon.setAttribute('data-scrum46-sort', '1');
+        icon.className = dir === 'asc' ? 'bi bi-caret-up-fill' : 'bi bi-caret-down-fill';
+        icon.style.marginLeft = '6px';
+        th.appendChild(icon);
+      }
+    });
+  }
+
+  function scrum46_renderDetail(product) {
+    const wrap = document.getElementById('scrum46-detail');
+    if (!wrap) return;
+    if (!product) {
+      wrap.innerHTML = '';
+      return;
+    }
+    const st = scrum46_statusOf(product.stock_quantity);
+    wrap.innerHTML = `
+      <div class="card" style="margin: 12px 0;">
+        <div class="row controls">
+          <div>
+            <strong><i class="bi bi-box"></i> Product #${product.id} — ${product.name}</strong>
+          </div>
+          <div class="right">
+            <button class="btn btn-secondary btn-sm" id="scrum46-detail-close"><i class="bi bi-x"></i> Close</button>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div>
+            <p><i class="bi bi-tags"></i> Category: <strong>${product.category || '—'}</strong></p>
+            <p><i class="bi bi-currency-dollar"></i> Price: <strong>${scrum46_currency(product.price)}</strong></p>
+          </div>
+          <div>
+            <p><i class="bi bi-archive"></i> Stock: <strong>${product.stock_quantity}</strong></p>
+            <p>Status: <span class="badge ${st.badgeClass}">${st.label}</span></p>
+          </div>
+        </div>
+        <p><i class="bi bi-card-text"></i> Description: ${product.description || 'No description provided.'}</p>
+      </div>
+    `;
+    const btn = document.getElementById('scrum46-detail-close');
+    if (btn) btn.addEventListener('click', () => scrum46_clearDetail());
+  }
+
+  function scrum46_renderNotFound(id) {
+    const wrap = document.getElementById('scrum46-detail');
+    if (!wrap) return;
+    wrap.innerHTML = `
+      <div class="alert-critical" style="margin: 12px 0;">
+        <i class="bi bi-exclamation-triangle"></i>
+        Product with ID ${id} was not found.
+      </div>
+    `;
+  }
+
+  function scrum46_clearDetail() {
+    const wrap = document.getElementById('scrum46-detail');
+    if (wrap) wrap.innerHTML = '';
+    scrum46State.detailId = null;
+  }
+
+  // Events
+  function scrum46_bindEvents() {
+    // Category filter
+    const cat = document.getElementById('scrum46-cat-filters');
+    if (cat) {
+      cat.addEventListener('click', (e) => {
+        const pill = e.target.closest('.pill');
+        if (!pill) return;
+        cat.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+        pill.classList.add('active');
+        scrum46State.filters.category = pill.getAttribute('data-filter') || 'all';
+        scrum46_render();
+      });
+    }
+
+    // Stock filter
+    const stock = document.getElementById('scrum46-stock-filters');
+    if (stock) {
+      stock.addEventListener('click', (e) => {
+        const pill = e.target.closest('.pill');
+        if (!pill) return;
+        stock.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+        pill.classList.add('active');
+        scrum46State.filters.stock = pill.getAttribute('data-filter') || 'all';
+        scrum46_render();
+      });
+    }
+
+    // Sorting
+    const thead = document.querySelector('#scrum46-table thead');
+    if (thead) {
+      thead.addEventListener('click', (e) => {
+        const th = e.target.closest('.th-sortable');
+        if (!th) return;
+        const key = th.getAttribute('data-key');
+        if (!key) return;
+        if (scrum46State.sort.key === key) {
+          scrum46State.sort.dir = scrum46State.sort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+          scrum46State.sort.key = key;
+          scrum46State.sort.dir = 'asc';
+        }
+        scrum46_render();
+      });
+    }
+
+    // Row click -> detail
+    const tbody = document.getElementById('scrum46-tbody');
+    if (tbody) {
+      tbody.addEventListener('click', (e) => {
+        const tr = e.target.closest('tr[data-id]');
+        if (!tr) return;
+        const id = parseInt(tr.getAttribute('data-id'), 10);
+        try {
+          const p = scrum46_getProductById(id);
+          scrum46State.detailId = id;
+          scrum46_renderDetail(p);
+        } catch (_) {
+          scrum46_renderNotFound(id);
+        }
+      });
+    }
+
+    // Lookup by ID
+    const btn = document.getElementById('scrum46-lookup-btn');
+    const input = document.getElementById('scrum46-lookup-id');
+    if (btn && input) {
+      const runLookup = () => {
+        const id = parseInt(input.value, 10);
+        if (!id || id < 1) {
+          scrum46_renderNotFound(input.value || '—');
+          return;
+        }
+        try {
+          const p = scrum46_getProductById(id);
+          scrum46State.detailId = id;
+          scrum46_renderDetail(p);
+        } catch (err) {
+          scrum46_renderNotFound(id);
+        }
+      };
+      btn.addEventListener('click', runLookup);
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          runLookup();
+        }
+      });
+    }
+  }
+
+  // Init
+  (function scrum46_init() {
+    scrum46_bindEvents();
+    scrum46_render();
+  })();
+</script>
+      </div>
+      <div class="section" id="section-SCRUM-50">
+<div class="row controls">
+  <div class="filter-pills" id="scrum50-filter-stock">
+    <span class="pill active" data-filter="all" data-group="stock"><i class="bi bi-collection"></i> All</span>
+    <span class="pill" data-filter="in" data-group="stock"><i class="bi bi-check2-circle"></i> In Stock</span>
+    <span class="pill" data-filter="low" data-group="stock"><i class="bi bi-exclamation-triangle"></i> Low Stock</span>
+    <span class="pill" data-filter="out" data-group="stock"><i class="bi bi-x-circle"></i> Out of Stock</span>
+  </div>
+  <div class="right">
+    <input id="scrum50-search" type="search" placeholder="Search products..." />
+  </div>
+</div>
+
+<div class="kpi-grid">
+  <div class="kpi-card">
+    <div class="label"><i class="bi bi-box-seam"></i> Total Products</div>
+    <div class="value" id="scrum50-kpi-total">0</div>
+    <div class="sub">in catalog</div>
+  </div>
+  <div class="kpi-card">
+    <div class="label"><i class="bi bi-cash-coin"></i> Average Price</div>
+    <div class="value" id="scrum50-kpi-avg">$0.00</div>
+    <div class="sub">across all SKUs</div>
+  </div>
+  <div class="kpi-card">
+    <div class="label"><i class="bi bi-battery-half"></i> Low Stock</div>
+    <div class="value" id="scrum50-kpi-low">0</div>
+    <div class="sub"><= 5 units</div>
+  </div>
+  <div class="kpi-card">
+    <div class="label"><i class="bi bi-battery"></i> Out of Stock</div>
+    <div class="value" id="scrum50-kpi-out">0</div>
+    <div class="sub">needs replenishment</div>
+  </div>
+</div>
+
+<div class="grid-2">
+  <div>
+    <div class="card">
+      <div class="row controls">
+        <div class="filter-pills" id="scrum50-filter-cat">
+          <span class="pill active" data-filter="all" data-group="category"><i class="bi bi-grid"></i> All Categories</span>
+          <span class="pill" data-filter="Electronics" data-group="category">Electronics</span>
+          <span class="pill" data-filter="Home" data-group="category">Home</span>
+          <span class="pill" data-filter="Outdoors" data-group="category">Outdoors</span>
+          <span class="pill" data-filter="Office" data-group="category">Office</span>
+          <span class="pill" data-filter="Accessories" data-group="category">Accessories</span>
+          <span class="pill" data-filter="Books" data-group="category">Books</span>
+        </div>
+      </div>
+      <table class="data-table" id="scrum50-table">
+        <thead>
+          <tr>
+            <th class="th-sortable" data-key="id">ID</th>
+            <th class="th-sortable" data-key="name">Name</th>
+            <th class="th-sortable" data-key="category">Category</th>
+            <th class="th-sortable" data-key="price">Price</th>
+            <th class="th-sortable" data-key="stock_quantity">Stock</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="scrum50-table-body"></tbody>
+      </table>
+      <div class="empty" id="scrum50-empty" style="display:none;">
+        <i class="bi bi-search"></i>
+        <text>No products match the current filters.</text>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div class="card">
+      <div class="row controls">
+        <div>
+          <strong><i class="bi bi-pencil-square"></i> Update Product</strong>
+        </div>
+        <div class="right">
+          <input id="scrum50-lookup-id" type="number" placeholder="Lookup by ID..." />
+          <button class="btn btn-secondary btn-sm" id="scrum50-btn-load"><i class="bi bi-search"></i> Load</button>
+        </div>
+      </div>
+
+      <div id="scrum50-alert" style="display:none;"></div>
+
+      <div class="row">
+        <div style="width:100%;">
+          <label for="scrum50-form-id">ID</label>
+          <input id="scrum50-form-id" type="number" readonly />
+        </div>
+      </div>
+      <div class="row">
+        <div style="width:100%;">
+          <label for="scrum50-form-name">Name</label>
+          <input id="scrum50-form-name" type="text" placeholder="Product name" />
+        </div>
+      </div>
+      <div class="row">
+        <div style="width:100%;">
+          <label for="scrum50-form-desc">Description</label>
+          <textarea id="scrum50-form-desc" rows="3" placeholder="Optional description"></textarea>
+        </div>
+      </div>
+      <div class="row">
+        <div style="width:50%;">
+          <label for="scrum50-form-price">Price</label>
+          <input id="scrum50-form-price" type="number" step="0.01" min="0" placeholder="0.00" />
+        </div>
+        <div style="width:50%;">
+          <label for="scrum50-form-stock">Stock Quantity</label>
+          <input id="scrum50-form-stock" type="number" min="0" step="1" placeholder="0" />
+        </div>
+      </div>
+      <div class="row">
+        <div style="width:100%;">
+          <label for="scrum50-form-category">Category</label>
+          <select id="scrum50-form-category">
+            <option value="">Select a category</option>
+            <option>Electronics</option>
+            <option>Home</option>
+            <option>Outdoors</option>
+            <option>Office</option>
+            <option>Accessories</option>
+            <option>Books</option>
+          </select>
+        </div>
+      </div>
+      <div class="row controls">
+        <div>
+          <button class="btn btn-primary" id="scrum50-btn-save"><i class="bi bi-save"></i> Save changes</button>
+          <button class="btn btn-secondary" id="scrum50-btn-reset"><i class="bi bi-arrow-counterclockwise"></i> Reset</button>
+        </div>
+        <div class="right" id="scrum50-form-status"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* SCRUM-50: Product update UI logic */
+(function(){
+  const container = document.getElementById('section-SCRUM-50');
+  if (!container) return;
+
+  if (container.dataset.initialized === '1') return;
+  container.dataset.initialized = '1';
+
+  const scrum50State = {
+    products: [
+      { id: 101, name: "Aurora Wireless Mouse", description: "Ergonomic 2.4G mouse with silent clicks", price: 29.99, stock_quantity: 14, category: "Electronics" },
+      { id: 102, name: "Nimbus Mechanical Keyboard", description: "Hot-swappable, RGB backlight", price: 89.50, stock_quantity: 3, category: "Electronics" },
+      { id: 103, name: "EverClean Vacuum Filter", description: "HEPA replacement filter", price: 12.00, stock_quantity: 0, category: "Home" },
+      { id: 104, name: "Trailblazer Water Bottle", description: "Insulated stainless steel, 1L", price: 19.95, stock_quantity: 27, category: "Outdoors" },
+      { id: 105, name: "SilkNote A5 Notebook", description: "Dotted pages, 192 sheets", price: 7.49, stock_quantity: 120, category: "Office" },
+      { id: 106, name: "Lumen LED Desk Lamp", description: "3 color modes, USB powered", price: 24.99, stock_quantity: 5, category: "Home" },
+      { id: 107, name: "Voyager USB-C Hub (7-in-1)", description: "4K HDMI, SD, PD 100W", price: 39.00, stock_quantity: 2, category: "Accessories" },
+      { id: 108, name: "Paperback: Clean Code", description: "By Robert C. Martin", price: 34.95, stock_quantity: 0, category: "Books" }
+    ],
+    sort: { key: 'id', dir: 'asc' },
+    filters: { stock: 'all', category: 'all', search: '' },
+    selectedId: null
+  };
+
+  // Helpers
+  function scrum50_currency(n) {
+    const v = isNaN(n) ? 0 : Number(n);
+    return '$' + v.toFixed(2);
+  }
+
+  function scrum50_status(p) {
+    if (p.stock_quantity === 0) return 'out';
+    if (p.stock_quantity <= 5) return 'low';
+    return 'in';
+  }
+
+  function scrum50_statusBadge(p) {
+    const s = scrum50_status(p);
+    if (s === 'in') return '<span class="badge badge-done">In stock</span>';
+    if (s === 'low') return '<span class="badge badge-warning">Low stock</span>';
+    return '<span class="badge badge-blocked">Out of stock</span>';
+  }
+
+  function scrum50_compare(a, b, key) {
+    const va = a[key];
+    const vb = b[key];
+    if (typeof va === 'number' && typeof vb === 'number') return va - vb;
+    return String(va).localeCompare(String(vb));
+  }
+
+  function scrum50_filtered() {
+    const { stock, category, search } = scrum50State.filters;
+    const term = (search || '').trim().toLowerCase();
+    return scrum50State.products.filter(p => {
+      // stock filter
+      const s = scrum50_status(p);
+      if (stock !== 'all' && s !== stock) return false;
+      // category filter
+      if (category !== 'all' && p.category !== category) return false;
+      // search filter (name or category)
+      if (term) {
+        const inName = p.name.toLowerCase().includes(term);
+        const inCat = p.category.toLowerCase().includes(term);
+        const inId = String(p.id).includes(term);
+        if (!(inName || inCat || inId)) return false;
+      }
+      return true;
+    });
+  }
+
+  function scrum50_renderKPIs() {
+    const prods = scrum50_filtered();
+    const total = prods.length;
+    const low = prods.filter(p => scrum50_status(p) === 'low').length;
+    const out = prods.filter(p => scrum50_status(p) === 'out').length;
+    const avg = total ? prods.reduce((sum, p) => sum + Number(p.price), 0) / total : 0;
+    container.querySelector('#scrum50-kpi-total').textContent = String(total);
+    container.querySelector('#scrum50-kpi-avg').textContent = scrum50_currency(avg);
+    container.querySelector('#scrum50-kpi-low').textContent = String(low);
+    container.querySelector('#scrum50-kpi-out').textContent = String(out);
+  }
+
+  function scrum50_renderTable() {
+    const tbody = container.querySelector('#scrum50-table-body');
+    const empty = container.querySelector('#scrum50-empty');
+    let rows = scrum50_filtered().slice();
+
+    // sort
+    const { key, dir } = scrum50State.sort;
+    rows.sort((a,b) => {
+      const cmp = scrum50_compare(a,b,key);
+      return dir === 'asc' ? cmp : -cmp;
+    });
+
+    // build rows
+    tbody.innerHTML = rows.map(p => {
+      return `
+        <tr data-id="${p.id}">
+          <td>${p.id}</td>
+          <td>${escapeHtml(p.name)}</td>
+          <td>${escapeHtml(p.category)}</td>
+          <td>${scrum50_currency(p.price)}</td>
+          <td>${p.stock_quantity}</td>
+          <td>${scrum50_statusBadge(p)}</td>
+          <td><button class="btn btn-sm btn-secondary" data-action="edit" data-id="${p.id}"><i class="bi bi-pencil"></i> Edit</button></td>
+        </tr>
+      `;
+    }).join('');
+
+    empty.style.display = rows.length ? 'none' : '';
+  }
+
+  function scrum50_renderForm(p) {
+    const idEl = container.querySelector('#scrum50-form-id');
+    const nameEl = container.querySelector('#scrum50-form-name');
+    const descEl = container.querySelector('#scrum50-form-desc');
+    const priceEl = container.querySelector('#scrum50-form-price');
+    const stockEl = container.querySelector('#scrum50-form-stock');
+    const catEl = container.querySelector('#scrum50-form-category');
+    const statusEl = container.querySelector('#scrum50-form-status');
+
+    if (!p) {
+      idEl.value = '';
+      nameEl.value = '';
+      descEl.value = '';
+      priceEl.value = '';
+      stockEl.value = '';
+      catEl.value = '';
+      statusEl.innerHTML = '';
+      return;
+    }
+
+    idEl.value = p.id;
+    nameEl.value = p.name;
+    descEl.value = p.description || '';
+    priceEl.value = Number(p.price).toFixed(2);
+    stockEl.value = p.stock_quantity;
+    catEl.value = p.category;
+    statusEl.innerHTML = scrum50_statusBadge(p);
+  }
+
+  function scrum50_showAlert(type, message) {
+    const el = container.querySelector('#scrum50-alert');
+    el.className = '';
+    el.style.display = '';
+    if (type === 'positive') {
+      el.classList.add('alert-positive');
+    } else if (type === 'warning') {
+      el.classList.add('alert-warning');
+    } else {
+      el.classList.add('alert-critical');
+    }
+    el.textContent = message;
+    // auto-hide after a while for positive messages
+    if (type === 'positive') {
+      setTimeout(() => { el.style.display = 'none'; }, 2500);
+    }
+  }
+
+  function scrum50_clearAlert() {
+    const el = container.querySelector('#scrum50-alert');
+    el.style.display = 'none';
+    el.className = '';
+    el.textContent = '';
+  }
+
+  function scrum50_selectById(id) {
+    const p = scrum50State.products.find(x => x.id === id);
+    scrum50State.selectedId = p ? id : null;
+    scrum50_renderForm(p || null);
+    if (!p) {
+      scrum50_showAlert('warning', `Product with id ${id} not found`);
+    } else {
+      scrum50_clearAlert();
+    }
+  }
+
+  function scrum50_validateAndUpdate(payload) {
+    // Implement validations aligned with service
+    // id
+    const id = Number(payload.id);
+    if (!Number.isInteger(id) || id <= 0) throw new Error('id must be a positive integer');
+
+    // existence
+    const idx = scrum50State.products.findIndex(x => x.id === id);
+    if (idx === -1) {
+      const notFound = new Error(`Product with id ${id} not found`);
+      notFound.name = 'NotFoundError';
+      throw notFound;
+    }
+
+    // name, category
+    const name = (payload.name ?? '').toString().trim();
+    if (!name) throw new Error('name must not be empty');
+
+    const category = (payload.category ?? '').toString().trim();
+    if (!category) throw new Error('category must not be empty');
+
+    // description
+    let description = payload.description;
+    if (description != null) {
+      description = String(description).trim();
+      if (description === '') description = null;
+    } else {
+      description = null;
+    }
+
+    // price
+    let priceNum = Number(payload.price);
+    if (Number.isNaN(priceNum)) throw new Error('price must be a numeric value');
+    if (priceNum < 0) throw new Error('price must be greater than or equal to 0');
+    priceNum = Math.round(priceNum * 100) / 100; // 2 decimals
+
+    // stock
+    const stock = Number(payload.stock_quantity);
+    if (!Number.isInteger(stock) || stock < 0) throw new Error('stock_quantity must be a non-negative integer');
+
+    // persist in local state (simulate DB update)
+    const updated = {
+      ...scrum50State.products[idx],
+      name,
+      description,
+      price: priceNum,
+      stock_quantity: stock,
+      category
+    };
+    scrum50State.products[idx] = updated;
+
+    return updated;
+  }
+
+  function scrum50_onSave() {
+    const id = Number(container.querySelector('#scrum50-form-id').value);
+    const name = container.querySelector('#scrum50-form-name').value;
+    const description = container.querySelector('#scrum50-form-desc').value;
+    const price = container.querySelector('#scrum50-form-price').value;
+    const stock_quantity = container.querySelector('#scrum50-form-stock').value;
+    const category = container.querySelector('#scrum50-form-category').value;
+
+    try {
+      const updated = scrum50_validateAndUpdate({ id, name, description, price, stock_quantity, category });
+      scrum50_showAlert('positive', `Product ${updated.id} updated`);
+      scrum50_renderKPIs();
+      scrum50_renderTable();
+      scrum50_renderForm(updated);
+    } catch (e) {
+      const msg = (e && e.message) ? e.message : 'Update failed';
+      scrum50_showAlert(e.name === 'NotFoundError' ? 'warning' : 'critical', msg);
+    }
+  }
+
+  function scrum50_onReset() {
+    if (scrum50State.selectedId) {
+      scrum50_selectById(scrum50State.selectedId);
+      scrum50_clearAlert();
+    } else {
+      scrum50_renderForm(null);
+      scrum50_clearAlert();
+    }
+  }
+
+  function scrum50_bindEvents() {
+    // Sortable headers
+    container.querySelectorAll('#scrum50-table thead .th-sortable').forEach(th => {
+      th.addEventListener('click', () => {
+        const key = th.getAttribute('data-key');
+        if (!key) return;
+        if (scrum50State.sort.key === key) {
+          scrum50State.sort.dir = scrum50State.sort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+          scrum50State.sort.key = key;
+          scrum50State.sort.dir = 'asc';
+        }
+        scrum50_renderTable();
+      });
+    });
+
+    // Table action buttons (edit)
+    container.querySelector('#scrum50-table-body').addEventListener('click', (e) => {
+      const target = e.target.closest('button[data-action="edit"]');
+      if (!target) return;
+      const id = Number(target.getAttribute('data-id'));
+      scrum50_selectById(id);
+    });
+
+    // Row click loads into form
+    container.querySelector('#scrum50-table-body').addEventListener('click', (e) => {
+      const tr = e.target.closest('tr[data-id]');
+      if (!tr) return;
+      const id = Number(tr.getAttribute('data-id'));
+      scrum50_selectById(id);
+    });
+
+    // Stock filter pills
+    container.querySelector('#scrum50-filter-stock').addEventListener('click', (e) => {
+      const pill = e.target.closest('.pill');
+      if (!pill) return;
+      const filter = pill.getAttribute('data-filter');
+      // toggle active within this group
+      container.querySelectorAll('#scrum50-filter-stock .pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      scrum50State.filters.stock = filter || 'all';
+      scrum50_renderKPIs();
+      scrum50_renderTable();
+    });
+
+    // Category filter pills
+    container.querySelector('#scrum50-filter-cat').addEventListener('click', (e) => {
+      const pill = e.target.closest('.pill');
+      if (!pill) return;
+      const filter = pill.getAttribute('data-filter');
+      container.querySelectorAll('#scrum50-filter-cat .pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      scrum50State.filters.category = filter || 'all';
+      scrum50_renderKPIs();
+      scrum50_renderTable();
+    });
+
+    // Search
+    container.querySelector('#scrum50-search').addEventListener('input', (e) => {
+      scrum50State.filters.search = e.target.value || '';
+      scrum50_renderKPIs();
+      scrum50_renderTable();
+    });
+
+    // Form buttons
+    container.querySelector('#scrum50-btn-save').addEventListener('click', scrum50_onSave);
+    container.querySelector('#scrum50-btn-reset').addEventListener('click', scrum50_onReset);
+
+    // Lookup by ID
+    container.querySelector('#scrum50-btn-load').addEventListener('click', () => {
+      const id = Number(container.querySelector('#scrum50-lookup-id').value);
+      if (!id) {
+        scrum50_showAlert('warning', 'Enter a valid product id to load');
+        return;
+      }
+      scrum50_selectById(id);
+    });
+  }
+
+  function scrum50_init() {
+    scrum50_renderKPIs();
+    scrum50_renderTable();
+    scrum50_renderForm(null);
+    scrum50_bindEvents();
+  }
+
+  // Escaping helper for HTML injection safety in names/categories
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;')
+      .replace(/'/g,'&#039;');
+  }
+
+  scrum50_init();
+})();
+</script>
+      </div>
+      <div class="section" id="section-SCRUM-54">
+<div class="row controls">
+  <div>
+    <div class="filter-pills" id="scrum54_filters">
+      <span class="pill active" data-filter="all">All</span>
+      <span class="pill" data-filter="in">In stock</span>
+      <span class="pill" data-filter="low">Low stock</span>
+      <span class="pill" data-filter="out">Out of stock</span>
+    </div>
+  </div>
+  <div class="right">
+    <input id="scrum54_input_id" type="number" min="1" placeholder="Product ID e.g. 1002" />
+    <button class="btn btn-danger btn-sm" id="scrum54_delete_by_id"><i class="bi bi-trash"></i> Delete by ID</button>
+  </div>
+</div>
+
+<div class="kpi-grid" id="scrum54_kpis">
+  <div class="kpi-card">
+    <div class="label">Products (visible)</div>
+    <div class="value" id="scrum54_kpi_total">0</div>
+    <div class="sub" id="scrum54_kpi_total_sub">of 0 total</div>
+  </div>
+  <div class="kpi-card">
+    <div class="label">Deletions Today</div>
+    <div class="value" id="scrum54_kpi_deletions">0</div>
+    <div class="sub" id="scrum54_kpi_lastop">No deletions yet</div>
+  </div>
+  <div class="kpi-card">
+    <div class="label">Delete Success Rate</div>
+    <div class="value" id="scrum54_kpi_rate">0%</div>
+    <div class="sub">
+      <div class="bar-wrap">
+        <div class="bar-bg">
+          <div class="bar-fill bar-bad" id="scrum54_rate_bar" style="width:0%"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="kpi-card">
+    <div class="label">FK-Blocked Deletes</div>
+    <div class="value" id="scrum54_kpi_fk">0</div>
+    <div class="sub">Foreign key constraints</div>
+  </div>
+</div>
+
+<div id="scrum54_alert"></div>
+
+<table class="data-table" id="scrum54_table">
+  <thead>
+    <tr>
+      <th class="th-sortable" data-key="id">ID <i class="bi bi-chevron-expand" data-sort-icon="id"></i></th>
+      <th class="th-sortable" data-key="name">Name <i class="bi bi-chevron-expand" data-sort-icon="name"></i></th>
+      <th class="th-sortable" data-key="category">Category <i class="bi bi-chevron-expand" data-sort-icon="category"></i></th>
+      <th class="th-sortable" data-key="price">Price <i class="bi bi-chevron-expand" data-sort-icon="price"></i></th>
+      <th class="th-sortable" data-key="stock">Stock <i class="bi bi-chevron-expand" data-sort-icon="stock"></i></th>
+      <th class="th-sortable" data-key="status">Status <i class="bi bi-chevron-expand" data-sort-icon="status"></i></th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody id="scrum54_tbody">
+    <!-- rows rendered by JS -->
+  </tbody>
+</table>
+
+<script>
+  // State and data
+  const scrum54State = {
+    allProducts: [
+      { id: 1001, name: "Aurora Mug", category: "Home", price: 12.99, stock: 24, hasOrders: false },
+      { id: 1002, name: "Nimbus Notebook", category: "Stationery", price: 5.49, stock: 0, hasOrders: true },
+      { id: 1003, name: "Zen Headphones", category: "Electronics", price: 59.0, stock: 3, hasOrders: false },
+      { id: 1004, name: "Pulse Keyboard", category: "Electronics", price: 89.0, stock: 7, hasOrders: false },
+      { id: 1005, name: "Trail Backpack", category: "Outdoors", price: 39.99, stock: 1, hasOrders: true },
+      { id: 1006, name: "Quartz Watch", category: "Accessories", price: 129.0, stock: 8, hasOrders: false },
+      { id: 1007, name: "Sierra Bottle", category: "Outdoors", price: 15.0, stock: 0, hasOrders: false },
+      { id: 1008, name: "Lumen Lamp", category: "Home", price: 22.5, stock: 5, hasOrders: false },
+      { id: 1009, name: "Pixel Pen", category: "Stationery", price: 1.99, stock: 50, hasOrders: false },
+      { id: 1010, name: "Atlas Chair", category: "Home", price: 199.0, stock: 2, hasOrders: true }
+    ],
+    filter: "all",
+    sortKey: "id",
+    sortDir: "asc",
+    metrics: { success: 0, fails: 0, fkBlocked: 0, lastOp: "" }
+  };
+
+  // Helpers
+  function scrum54_statusInfo(p) {
+    if (p.stock <= 0) return { label: "Out of stock", badge: "badge-blocked", order: 2 };
+    if (p.stock <= 5) return { label: "Low stock", badge: "badge-warning", order: 1 };
+    return { label: "In stock", badge: "badge-done", order: 0 };
+  }
+
+  function scrum54_currency(n) {
+    return "$" + n.toFixed(2);
+  }
+
+  function scrum54_filtered() {
+    const list = scrum54State.allProducts.slice();
+    // Filter
+    let filtered = list;
+    if (scrum54State.filter === "in") {
+      filtered = list.filter(p => p.stock > 5);
+    } else if (scrum54State.filter === "low") {
+      filtered = list.filter(p => p.stock > 0 && p.stock <= 5);
+    } else if (scrum54State.filter === "out") {
+      filtered = list.filter(p => p.stock <= 0);
+    }
+
+    // Sort
+    const key = scrum54State.sortKey;
+    const dir = scrum54State.sortDir === "asc" ? 1 : -1;
+    filtered.sort((a, b) => {
+      let va, vb;
+      if (key === "status") {
+        va = scrum54_statusInfo(a).order;
+        vb = scrum54_statusInfo(b).order;
+      } else if (key === "name" || key === "category") {
+        va = (a[key] || "").toString().toLowerCase();
+        vb = (b[key] || "").toString().toLowerCase();
+      } else if (key === "price" || key === "stock" || key === "id") {
+        va = Number(a[key]);
+        vb = Number(b[key]);
+      } else {
+        va = a[key];
+        vb = b[key];
+      }
+      if (va < vb) return -1 * dir;
+      if (va > vb) return 1 * dir;
+      // secondary sort by id to stabilize
+      return (a.id - b.id) * dir;
+    });
+
+    return filtered;
+  }
+
+  function scrum54_setActiveSortIcon() {
+    const icons = document.querySelectorAll('[data-sort-icon]');
+    icons.forEach(i => i.className = "bi bi-chevron-expand");
+    const active = document.querySelector('[data-sort-icon="' + scrum54State.sortKey + '"]');
+    if (active) {
+      active.className = scrum54State.sortDir === "asc" ? "bi bi-caret-up-fill" : "bi bi-caret-down-fill";
+    }
+  }
+
+  // Rendering
+  function scrum54_renderKPIs() {
+    const total = scrum54State.allProducts.length;
+    const visible = scrum54_filtered().length;
+    const succ = scrum54State.metrics.success;
+    const fails = scrum54State.metrics.fails;
+    const rate = (succ + fails) === 0 ? 0 : Math.round((succ / (succ + fails)) * 100);
+
+    document.getElementById("scrum54_kpi_total").textContent = String(visible);
+    document.getElementById("scrum54_kpi_total_sub").textContent = "of " + total + " total" + (scrum54State.filter !== "all" ? " (filtered)" : "");
+    document.getElementById("scrum54_kpi_deletions").textContent = String(succ);
+    document.getElementById("scrum54_kpi_lastop").textContent = scrum54State.metrics.lastOp || "No deletions yet";
+    document.getElementById("scrum54_kpi_rate").textContent = rate + "%";
+    const bar = document.getElementById("scrum54_rate_bar");
+    bar.style.width = rate + "%";
+    bar.className = "bar-fill " + (rate >= 90 ? "bar-ok" : rate >= 60 ? "bar-warn" : "bar-bad");
+    document.getElementById("scrum54_kpi_fk").textContent = String(scrum54State.metrics.fkBlocked);
+  }
+
+  function scrum54_renderFilters() {
+    const pills = document.querySelectorAll("#scrum54_filters .pill");
+    pills.forEach(p => {
+      if (p.getAttribute("data-filter") === scrum54State.filter) {
+        p.classList.add("active");
+      } else {
+        p.classList.remove("active");
+      }
+    });
+  }
+
+  function scrum54_renderTable() {
+    const tbody = document.getElementById("scrum54_tbody");
+    const rows = scrum54_filtered();
+    if (rows.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7"><div class="empty"><i class="bi bi-box-seam"></i> No products match the current filter.</div></td></tr>';
+      return;
+    }
+    const html = rows.map(p => {
+      const s = scrum54_statusInfo(p);
+      return `
+        <tr data-id="${p.id}">
+          <td>${p.id}</td>
+          <td>${p.name}</td>
+          <td>${p.category}</td>
+          <td>${scrum54_currency(p.price)}</td>
+          <td>${p.stock}</td>
+          <td><span class="badge ${s.badge}">${s.label}</span></td>
+          <td>
+            <button class="btn btn-danger btn-sm" data-action="delete" data-id="${p.id}">
+              <i class="bi bi-trash"></i> Delete
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join("");
+    tbody.innerHTML = html;
+  }
+
+  function scrum54_render() {
+    scrum54_renderFilters();
+    scrum54_renderTable();
+    scrum54_renderKPIs();
+    scrum54_setActiveSortIcon();
+  }
+
+  // Alerts
+  let scrum54_alertTimer = null;
+  function scrum54_showAlert(type, message) {
+    const wrap = document.getElementById("scrum54_alert");
+    const cls = type === "positive" ? "alert-positive" : type === "warning" ? "alert-warning" : "alert-critical";
+    wrap.innerHTML = `<div class="${cls}">${message}</div>`;
+    if (scrum54_alertTimer) clearTimeout(scrum54_alertTimer);
+    scrum54_alertTimer = setTimeout(() => { wrap.innerHTML = ""; }, 5000);
+  }
+
+  // Simulated API aligned with backend contract:
+  // delete_product(product_id: int) -> resolves 1 on success; rejects with
+  // {name:"ProductNotFoundError"} or {name:"IntegrityError"} or {name:"ValueError"}
+  function scrum54_api_delete_product(product_id) {
+    return new Promise((resolve, reject) => {
+      // Validate
+      if (typeof product_id !== "number" || !Number.isInteger(product_id)) {
+        return reject({ name: "ValueError", message: "product_id must be an integer." });
+      }
+      if (product_id <= 0) {
+        return reject({ name: "ValueError", message: "product_id must be a positive integer." });
+      }
+
+      // Lookup
+      const idx = scrum54State.allProducts.findIndex(p => p.id === product_id);
+      if (idx === -1) {
+        return reject({ name: "ProductNotFoundError", message: "Product with id " + product_id + " not found." });
+      }
+
+      const prod = scrum54State.allProducts[idx];
+      // Simulate FK constraint
+      if (prod.hasOrders) {
+        return reject({ name: "IntegrityError", message: "Delete prevented by foreign key constraint." });
+      }
+
+      // Simulate transactional delete
+      scrum54State.allProducts.splice(idx, 1);
+      resolve(1);
+    });
+  }
+
+  async function scrum54_handleDelete(productId, sourceLabel) {
+    const btns = document.querySelectorAll('[data-action="delete"][data-id="' + productId + '"]');
+    btns.forEach(b => b.disabled = true);
+    try {
+      const affected = await scrum54_api_delete_product(productId);
+      scrum54State.metrics.success += 1;
+      scrum54State.metrics.lastOp = "Deleted ID " + productId + " (rows: " + affected + ")";
+      scrum54_showAlert("positive", "Deleted product " + productId + " — affected rows: " + affected + ".");
+    } catch (err) {
+      scrum54State.metrics.fails += 1;
+      if (err && err.name === "ProductNotFoundError") {
+        scrum54State.metrics.lastOp = "Not found: ID " + productId;
+        scrum54_showAlert("warning", "Product with ID " + productId + " not found.");
+      } else if (err && err.name === "IntegrityError") {
+        scrum54State.metrics.fkBlocked += 1;
+        scrum54State.metrics.lastOp = "Blocked by FK: ID " + productId;
+        scrum54_showAlert("critical", "Cannot delete product " + productId + " due to foreign key constraints.");
+      } else if (err && err.name === "ValueError") {
+        scrum54State.metrics.lastOp = "Invalid ID: " + productId;
+        scrum54_showAlert("warning", err.message || "Invalid product ID.");
+      } else {
+        scrum54State.metrics.lastOp = "Error deleting ID " + productId;
+        scrum54_showAlert("critical", "Unexpected error while deleting product " + productId + ".");
+      }
+    } finally {
+      scrum54_render();
+    }
+  }
+
+  // Event wiring
+  function scrum54_bindEvents() {
+    // Filter pills
+    document.getElementById("scrum54_filters").addEventListener("click", (e) => {
+      const pill = e.target.closest(".pill");
+      if (!pill) return;
+      const f = pill.getAttribute("data-filter");
+      if (f && scrum54State.filter !== f) {
+        scrum54State.filter = f;
+        scrum54_render();
+      }
+    });
+
+    // Sortable headers
+    document.querySelector("#scrum54_table thead").addEventListener("click", (e) => {
+      const th = e.target.closest(".th-sortable");
+      if (!th) return;
+      const key = th.getAttribute("data-key");
+      if (!key) return;
+      if (scrum54State.sortKey === key) {
+        scrum54State.sortDir = scrum54State.sortDir === "asc" ? "desc" : "asc";
+      } else {
+        scrum54State.sortKey = key;
+        scrum54State.sortDir = "asc";
+      }
+      scrum54_render();
+    });
+
+    // Delete buttons (delegated)
+    document.getElementById("scrum54_tbody").addEventListener("click", (e) => {
+      const btn = e.target.closest('[data-action="delete"]');
+      if (!btn) return;
+      const id = parseInt(btn.getAttribute("data-id"), 10);
+      if (!Number.isInteger(id)) return;
+      scrum54_handleDelete(id, "row");
+    });
+
+    // Delete by ID control
+    document.getElementById("scrum54_delete_by_id").addEventListener("click", () => {
+      const v = document.getElementById("scrum54_input_id").value.trim();
+      const id = Number(v);
+      if (!v) {
+        scrum54_showAlert("warning", "Enter a product ID to delete.");
+        return;
+      }
+      scrum54_handleDelete(id, "input");
+    });
+  }
+
+  // Init
+  (function scrum54_init() {
+    scrum54_bindEvents();
+    scrum54_render();
+  })();
+</script>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SECTIONS = [{"key": "SCRUM-42", "title": "Create products"}, {"key": "SCRUM-46", "title": "List and retrieve products"}, {"key": "SCRUM-50", "title": "Update existing products"}, {"key": "SCRUM-54", "title": "Delete products"}];
+    function navigate(key) {
+      document.querySelectorAll('#sidebar nav a').forEach(a => a.classList.toggle('active', a.dataset.sec === key));
+      document.querySelectorAll('.section').forEach(s => s.classList.toggle('active', s.id === 'section-' + key));
+      const meta = SECTIONS.find(s => s.key === key);
+      if (meta) document.getElementById('topbar-title').textContent = meta.title;
+    }
+    document.querySelectorAll('#sidebar nav a').forEach(a => {
+      a.addEventListener('click', () => navigate(a.dataset.sec));
+    });
+    // activate first
+    if (SECTIONS.length) navigate(SECTIONS[0].key);
+  </script>
+</body>
+</html>
