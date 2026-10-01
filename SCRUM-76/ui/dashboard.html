@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>User Registry</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    :root{
+      --sap-dark:#003865; --sap-blue:#0070d2; --sap-light:#f5f6fa;
+      --sap-border:#d1d8e0; --sap-text:#32363a; --sap-muted:#6e7a8a;
+      --high:#e74c3c; --medium:#f39c12; --low:#27ae60;
+    }
+    *{box-sizing:border-box; margin:0; padding:0}
+    body{display:flex; height:100vh; overflow:hidden; background:var(--sap-light); font-family:'72','Segoe UI',sans-serif; color:var(--sap-text); font-size:14px}
+    a{color:var(--sap-blue); text-decoration:none}
+    /* Sidebar */
+    #sidebar{width:220px; background:var(--sap-dark); color:#fff; display:flex; flex-direction:column; flex-shrink:0}
+    #sidebar .brand{padding:16px; font-weight:700; font-size:15px; display:flex; align-items:center; gap:8px; border-bottom:1px solid rgba(255,255,255,.1)}
+    #sidebar nav{display:flex; flex-direction:column; padding:8px 0; flex:1}
+    #sidebar nav a{color:rgba(255,255,255,.75); padding:10px 18px; display:flex; align-items:center; gap:10px; border-left:3px solid transparent; font-size:13px; transition:all .15s; cursor:pointer}
+    #sidebar nav a:hover{background:rgba(255,255,255,.05); color:#fff}
+    #sidebar nav a.active{color:#fff; border-left-color:#91c8f6; background:rgba(255,255,255,.1)}
+    #sidebar .sidebar-footer{padding:12px 16px; font-size:11px; color:rgba(255,255,255,.4)}
+    /* Main */
+    #main{flex:1; display:flex; flex-direction:column; min-width:0; overflow:hidden}
+    #topbar{height:52px; background:#fff; border-bottom:1px solid var(--sap-border); display:flex; align-items:center; padding:0 20px; gap:12px; flex-shrink:0}
+    #topbar-title{font-weight:600; font-size:15px}
+    #content{flex:1; overflow-y:auto; padding:20px}
+    /* Sections */
+    .section{display:none}
+    .section.active{display:block}
+    /* Buttons */
+    .btn{display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:4px; font-size:13px; font-weight:500; cursor:pointer; border:none; font-family:inherit}
+    .btn-primary{background:var(--sap-blue); color:#fff} .btn-primary:hover{background:#005fb3}
+    .btn-secondary{background:#fff; border:1px solid var(--sap-border); color:var(--sap-text)}
+    .btn-danger{background:var(--high); color:#fff}
+    .btn-sm{padding:4px 10px; font-size:12px}
+    /* KPI */
+    .kpi-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px}
+    .kpi-card{background:#fff; border:1px solid var(--sap-border); border-radius:6px; padding:14px 16px}
+    .kpi-card .label{font-size:11px; color:var(--sap-muted); text-transform:uppercase; letter-spacing:.4px}
+    .kpi-card .value{font-size:24px; font-weight:700; margin-top:4px; color:var(--sap-dark)}
+    .kpi-card .sub{font-size:12px; color:var(--sap-muted); margin-top:2px}
+    /* Badges */
+    .badge{display:inline-flex; align-items:center; gap:3px; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:500}
+    .badge-done{background:#eafaf1; color:#27ae60} .badge-pending{background:#fef9e7; color:#f39c12}
+    .badge-blocked{background:#fdecea; color:#e74c3c} .badge-progress{background:#e8f4fd; color:#0070d2}
+    .badge-warning{background:#fef9e7; color:#f39c12}
+    /* Table */
+    .data-table{width:100%; border-collapse:collapse; background:#fff; border:1px solid var(--sap-border); border-radius:6px; overflow:hidden}
+    .data-table th{background:var(--sap-dark); color:#fff; padding:10px 14px; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.4px; user-select:none}
+    .data-table td{padding:10px 14px; border-bottom:1px solid var(--sap-border); font-size:13px}
+    .data-table tr:last-child td{border-bottom:none}
+    .data-table tr:hover td{background:#f8f9fb}
+    .th-sortable{cursor:pointer}
+    /* Cards */
+    .card{background:#fff; border:1px solid var(--sap-border); border-radius:6px; padding:16px; margin-bottom:12px}
+    .card-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px}
+    /* Progress bars */
+    .bar-wrap{display:flex; align-items:center; gap:8px}
+    .bar-bg{flex:1; height:8px; background:var(--sap-border); border-radius:4px; overflow:hidden; min-width:60px}
+    .bar-fill{height:100%; border-radius:4px}
+    .bar-ok{background:#27ae60} .bar-warn{background:#f39c12} .bar-bad{background:#e74c3c}
+    /* Alerts */
+    .alert-critical{background:#fdecea; border-left:3px solid var(--high); border-radius:0 4px 4px 0; padding:8px 12px; margin-bottom:8px}
+    .alert-warning{background:#fef9e7; border-left:3px solid var(--medium); border-radius:0 4px 4px 0; padding:8px 12px; margin-bottom:8px}
+    .alert-positive{background:#eafaf1; border-left:3px solid var(--low); border-radius:0 4px 4px 0; padding:8px 12px; margin-bottom:8px}
+    /* Filters */
+    .filter-pills{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px}
+    .pill{display:inline-flex; align-items:center; gap:5px; padding:5px 12px; border:1px solid var(--sap-border); border-radius:16px; background:#fff; color:var(--sap-muted); font-size:12px; cursor:pointer}
+    .pill.active{background:var(--sap-dark); color:#fff; border-color:var(--sap-dark)}
+    /* Layout helpers */
+    .row{display:flex; align-items:center; gap:12px; flex-wrap:wrap}
+    .controls{display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; flex-wrap:wrap}
+    .right{margin-left:auto}
+    .grid-2{display:grid; grid-template-columns:2fr 1fr; gap:16px}
+    .grid-4{display:grid; grid-template-columns:repeat(4,1fr); gap:12px}
+    .section-title{font-size:18px; font-weight:600; color:var(--sap-dark); margin-bottom:4px}
+    .section-sub{font-size:13px; color:var(--sap-muted); margin-bottom:20px}
+    /* Empty */
+    .empty{text-align:center; padding:48px 20px; color:var(--sap-muted)}
+    .empty i{font-size:40px; display:block; margin-bottom:12px}
+    /* Modal */
+    .modal-overlay{display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:100; align-items:center; justify-content:center}
+    .modal-overlay.open{display:flex}
+    .modal-box{background:#fff; border-radius:8px; padding:24px; max-width:520px; width:95%; max-height:90vh; overflow-y:auto; position:relative}
+    .modal-close{position:absolute; top:12px; right:12px; background:none; border:none; cursor:pointer; font-size:18px; color:var(--sap-muted)}
+    .form-group{margin-bottom:14px}
+    .form-group label{display:block; font-size:12px; font-weight:600; color:var(--sap-muted); margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px}
+    .form-group input, .form-group select, .form-group textarea{width:100%; padding:8px 10px; border:1px solid var(--sap-border); border-radius:4px; font-size:13px; font-family:inherit}
+    .form-group input:focus, .form-group select:focus{outline:none; border-color:var(--sap-blue); box-shadow:0 0 0 2px rgba(0,112,210,.15)}
+    @media(max-width:1100px){.kpi-grid{grid-template-columns:repeat(2,1fr)} .grid-2{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <aside id="sidebar">
+    <div class="brand"><i class="bi bi-people"></i> User Registry</div>
+    <nav>
+      <a data-sec="SCRUM-77"><i class="bi bi-plus-circle"></i> Create, view, update, and delete tasks via a REST API and a single-page dashboard so that I can manage my work items end-to-end</a>
+      <a data-sec="SCRUM-81"><i class="bi bi-person"></i> User, I want the system to enforce valid task data and sensible defaults so that my tasks are consistent and reliable</a>
+    </nav>
+    <div class="sidebar-footer">SCRUM-76 &bull; SDD Pipeline</div>
+  </aside>
+
+  <div id="main">
+    <div id="topbar">
+      <span id="topbar-title">Create, view, update, and delete tasks via a REST API and a single-page dashboard so that I can manage my work items end-to-end</span>
+      <div style="margin-left:auto; display:flex; align-items:center; gap:8px">
+        <span id="api-status" style="font-size:11px; color:var(--sap-muted)"></span>
+      </div>
+    </div>
+    <div id="content">
+      <div class="section" id="section-SCRUM-77">
+<div class="row controls">
+  <div>
+    <div class="filter-pills" id="scrum77-filters">
+      <div class="pill active" data-filter="all"><i class="bi bi-grid"></i> All</div>
+      <div class="pill" data-filter="todo"><i class="bi bi-list-task"></i> Todo</div>
+      <div class="pill" data-filter="doing"><i class="bi bi-hourglass-split"></i> Doing</div>
+      <div class="pill" data-filter="done"><i class="bi bi-check2-circle"></i> Done</div>
+    </div>
+  </div>
+  <div class="right">
+    <button class="btn btn-primary" id="scrum77-btn-add"><i class="bi bi-plus-lg"></i> Add Task</button>
+  </div>
+</div>
+
+<div id="scrum77-alert" class="alert-critical" style="display:none;"></div>
+
+<div class="kpi-grid" id="scrum77-kpis">
+  <div class="kpi-card">
+    <div class="label">Total Tasks</div>
+    <div class="value" id="scrum77-kpi-total">0</div>
+    <div class="sub" id="scrum77-kpi-created"></div>
+  </div>
+  <div class="kpi-card">
+    <div class="label">Todo</div>
+    <div class="value" id="scrum77-kpi-todo">0</div>
+    <div class="sub">Queued work</div>
+  </div>
+  <div class="kpi-card">
+    <div class="label">Doing</div>
+    <div class="value" id="scrum77-kpi-doing">0</div>
+    <div class="sub">In progress</div>
+  </div>
+  <div class="kpi-card">
+    <div class="label">Done</div>
+    <div class="value" id="scrum77-kpi-done">0</div>
+    <div class="sub" id="scrum77-kpi-donepct">0% complete</div>
+  </div>
+</div>
+
+<div class="grid-4" id="scrum77-board">
+  <div class="card scrum77-col" data-status="todo">
+    <div class="row">
+      <div><i class="bi bi-list-task"></i> Todo <span class="badge" id="scrum77-count-todo">0</span></div>
+      <div class="right">
+        <button class="btn btn-sm btn-secondary" data-add="todo"><i class="bi bi-plus"></i> Add</button>
+      </div>
+    </div>
+    <div class="card-grid" id="scrum77-list-todo">
+      <div class="empty"><i class="bi bi-arrow-repeat"></i> Loading tasks...</div>
+    </div>
+  </div>
+
+  <div class="card scrum77-col" data-status="doing">
+    <div class="row">
+      <div><i class="bi bi-hourglass-split"></i> Doing <span class="badge" id="scrum77-count-doing">0</span></div>
+      <div class="right">
+        <button class="btn btn-sm btn-secondary" data-add="doing"><i class="bi bi-plus"></i> Add</button>
+      </div>
+    </div>
+    <div class="card-grid" id="scrum77-list-doing">
+      <div class="empty"><i class="bi bi-arrow-repeat"></i> Loading tasks...</div>
+    </div>
+  </div>
+
+  <div class="card scrum77-col" data-status="done">
+    <div class="row">
+      <div><i class="bi bi-check2-circle"></i> Done <span class="badge" id="scrum77-count-done">0</span></div>
+      <div class="right">
+        <button class="btn btn-sm btn-secondary" data-add="done"><i class="bi bi-plus"></i> Add</button>
+      </div>
+    </div>
+    <div class="card-grid" id="scrum77-list-done">
+      <div class="empty"><i class="bi bi-arrow-repeat"></i> Loading tasks...</div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="scrum77-modal">
+  <div class="modal-box">
+    <div class="modal-close"><button type="button" class="btn btn-secondary btn-sm" id="scrum77-modal-close"><i class="bi bi-x-lg"></i></button></div>
+    <h3 id="scrum77-modal-title"><i class="bi bi-clipboard-plus"></i> Add Task</h3>
+    <div id="scrum77-modal-alert" class="alert-critical" style="display:none;"></div>
+    <form id="scrum77-form">
+      <input type="hidden" id="scrum77-id" />
+      <div class="row">
+        <div style="flex:1;">
+          <label for="scrum77-title">Title</label>
+          <input id="scrum77-title" required placeholder="Enter task title" />
+        </div>
+      </div>
+      <div class="row">
+        <div style="flex:1;">
+          <label for="scrum77-desc">Description</label>
+          <textarea id="scrum77-desc" placeholder="Optional details"></textarea>
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="scrum77-status">Status</label>
+          <select id="scrum77-status">
+            <option value="todo">todo</option>
+            <option value="doing">doing</option>
+            <option value="done">done</option>
+          </select>
+        </div>
+        <div class="right">
+          <button type="button" class="btn btn-secondary" id="scrum77-cancel">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="scrum77-save"><i class="bi bi-save"></i> Save</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  // State
+  const scrum77State = {
+    items: [],
+    loading: false,
+    filter: 'all'
+  };
+
+  // DOM refs
+  const scrum77Dom = {
+    alert: document.getElementById('scrum77-alert'),
+    kpiTotal: document.getElementById('scrum77-kpi-total'),
+    kpiTodo: document.getElementById('scrum77-kpi-todo'),
+    kpiDoing: document.getElementById('scrum77-kpi-doing'),
+    kpiDone: document.getElementById('scrum77-kpi-done'),
+    kpiDonePct: document.getElementById('scrum77-kpi-donepct'),
+    countTodo: document.getElementById('scrum77-count-todo'),
+    countDoing: document.getElementById('scrum77-count-doing'),
+    countDone: document.getElementById('scrum77-count-done'),
+    listTodo: document.getElementById('scrum77-list-todo'),
+    listDoing: document.getElementById('scrum77-list-doing'),
+    listDone: document.getElementById('scrum77-list-done'),
+    columns: Array.from(document.querySelectorAll('.scrum77-col')),
+    filters: document.getElementById('scrum77-filters'),
+    btnAdd: document.getElementById('scrum77-btn-add'),
+    modal: document.getElementById('scrum77-modal'),
+    modalTitle: document.getElementById('scrum77-modal-title'),
+    modalAlert: document.getElementById('scrum77-modal-alert'),
+    modalClose: document.getElementById('scrum77-modal-close'),
+    form: document.getElementById('scrum77-form'),
+    fieldId: document.getElementById('scrum77-id'),
+    fieldTitle: document.getElementById('scrum77-title'),
+    fieldDesc: document.getElementById('scrum77-desc'),
+    fieldStatus: document.getElementById('scrum77-status'),
+    btnCancel: document.getElementById('scrum77-cancel'),
+    btnSave: document.getElementById('scrum77-save')
+  };
+
+  const scrum77Base = (window.API_BASE || '').replace(/\/+$/, '');
+
+  // API helpers
+  async function scrum77_api(path, opts = {}) {
+    const res = await fetch(scrum77Base + path, Object.assign({
+      headers: { 'Accept': 'application/json' }
+    }, opts));
+    if (!res.ok) {
+      let msg;
+      try {
+        const data = await res.json();
+        msg = data && (data.error || data.message);
+      } catch (_e) {
+        msg = res.status + ' ' + res.statusText;
+      }
+      const err = new Error(msg || 'Request failed');
+      err.status = res.status;
+      throw err;
+    }
+    // For DELETE returning no body, handle gracefully
+    const ct = res.headers.get('content-type') || '';
+    if (ct.includes('application/json')) return res.json();
+    return null;
+  }
+
+  function scrum77_setAlert(msg) {
+    if (!msg) {
+      scrum77Dom.alert.style.display = 'none';
+      scrum77Dom.alert.textContent = '';
+    } else {
+      scrum77Dom.alert.textContent = msg;
+      scrum77Dom.alert.style.display = '';
+    }
+  }
+
+  function scrum77_showLoading() {
+    scrum77Dom.listTodo.innerHTML = '<div class="empty"><i class="bi bi-arrow-repeat"></i> Loading tasks...</div>';
+    scrum77Dom.listDoing.innerHTML = '<div class="empty"><i class="bi bi-arrow-repeat"></i> Loading tasks...</div>';
+    scrum77Dom.listDone.innerHTML = '<div class="empty"><i class="bi bi-arrow-repeat"></i> Loading tasks...</div>';
+  }
+
+  async function scrum77_load() {
+    try {
+      scrum77_setAlert('');
+      scrum77State.loading = true;
+      scrum77_showLoading();
+      const tasks = await scrum77_api('/tasks');
+      scrum77State.items = Array.isArray(tasks) ? tasks : [];
+      scrum77_render();
+    } catch (e) {
+      scrum77_setAlert(e.message || 'Failed to load tasks');
+      scrum77Dom.listTodo.innerHTML = '<div class="empty"><i class="bi bi-exclamation-triangle"></i> Failed to load</div>';
+      scrum77Dom.listDoing.innerHTML = '<div class="empty"><i class="bi bi-exclamation-triangle"></i> Failed to load</div>';
+      scrum77Dom.listDone.innerHTML = '<div class="empty"><i class="bi bi-exclamation-triangle"></i> Failed to load</div>';
+    } finally {
+      scrum77State.loading = false;
+    }
+  }
+
+  function scrum77_groupByStatus(items) {
+    const g = { todo: [], doing: [], done: [] };
+    for (const t of items) {
+      if (g[t.status]) g[t.status].push(t);
+    }
+    return g;
+  }
+
+  function scrum77_renderKPIs(grouped) {
+    const todo = grouped.todo.length;
+    const doing = grouped.doing.length;
+    const done = grouped.done.length;
+    const total = todo + doing + done;
+    scrum77Dom.kpiTotal.textContent = String(total);
+    scrum77Dom.kpiTodo.textContent = String(todo);
+    scrum77Dom.kpiDoing.textContent = String(doing);
+    scrum77Dom.kpiDone.textContent = String(done);
+    const pct = total ? Math.round((done / total) * 100) : 0;
+    scrum77Dom.kpiDonePct.textContent = pct + '% complete';
+    scrum77Dom.countTodo.textContent = String(todo);
+    scrum77Dom.countDoing.textContent = String(doing);
+    scrum77Dom.countDone.textContent = String(done);
+  }
+
+  function scrum77_escape(text) {
+    const span = document.createElement('span');
+    span.textContent = text == null ? '' : String(text);
+    return span.textContent;
+  }
+
+  function scrum77_taskCard(task) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.dataset.id = task.id;
+
+    // Header row with title and status badge
+    const header = document.createElement('div');
+    header.className = 'row';
+    const title = document.createElement('div');
+    title.innerHTML = '<i class="bi bi-clipboard-check"></i> ' + scrum77_escape(task.title);
+    const statusWrap = document.createElement('div');
+    statusWrap.className = 'right';
+    const badge = document.createElement('span');
+    badge.className = 'badge ' + (task.status === 'done' ? 'badge-done' : task.status === 'doing' ? 'badge-progress' : 'badge-pending');
+    badge.textContent = task.status;
+    statusWrap.appendChild(badge);
+    header.appendChild(title);
+    header.appendChild(statusWrap);
+
+    card.appendChild(header);
+
+    // Description
+    if ((task.description || '').trim() !== '') {
+      const desc = document.createElement('div');
+      desc.className = 'sub';
+      desc.textContent = task.description;
+      card.appendChild(desc);
+    }
+
+    // Created date
+    if (task.created_date) {
+      const meta = document.createElement('div');
+      meta.className = 'sub';
+      meta.innerHTML = '<i class="bi bi-clock"></i> ' + scrum77_escape(task.created_date);
+      card.appendChild(meta);
+    }
+
+    // Actions
+    const actions = document.createElement('div');
+    actions.className = 'row controls';
+
+    // Status select
+    const selWrap = document.createElement('div');
+    const sel = document.createElement('select');
+    ['todo','doing','done'].forEach(s => {
+      const o = document.createElement('option');
+      o.value = s; o.textContent = s;
+      if (s === task.status) o.selected = true;
+      sel.appendChild(o);
+    });
+    sel.addEventListener('change', async (e) => {
+      const newStatus = e.target.value;
+      sel.disabled = true;
+      try {
+        await scrum77_api('/tasks/' + encodeURIComponent(task.id), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({ status: newStatus })
+        });
+        await scrum77_load();
+      } catch (err) {
+        scrum77_setAlert(err.message || 'Failed to update status');
+        sel.value = task.status;
+      } finally {
+        sel.disabled = false;
+      }
+    });
+    selWrap.appendChild(sel);
+
+    // Edit button
+    const right = document.createElement('div');
+    right.className = 'right';
+    const editBtn = document.createElement('button');
+    editBtn.className = 'btn btn-secondary btn-sm';
+    editBtn.innerHTML = '<i class="bi bi-pencil"></i> Edit';
+    editBtn.addEventListener('click', () => scrum77_openModal(task));
+
+    // Delete button with inline confirmation
+    const delBtn = document.createElement('button');
+    delBtn.className = 'btn btn-danger btn-sm';
+    delBtn.innerHTML = '<i class="bi bi-trash"></i> Delete';
+
+    const confirmRow = document.createElement('div');
+    confirmRow.className = 'row';
+    confirmRow.style.display = 'none';
+    const confirmText = document.createElement('div');
+    confirmText.textContent = 'Confirm delete?';
+    const confirmActions = document.createElement('div');
+    confirmActions.className = 'right';
+    const confirmYes = document.createElement('button');
+    confirmYes.className = 'btn btn-danger btn-sm';
+    confirmYes.textContent = 'Delete';
+    const confirmNo = document.createElement('button');
+    confirmNo.className = 'btn btn-secondary btn-sm';
+    confirmNo.textContent = 'Cancel';
+    confirmActions.appendChild(confirmNo);
+    confirmActions.appendChild(confirmYes);
+    confirmRow.appendChild(confirmText);
+    confirmRow.appendChild(confirmActions);
+
+    delBtn.addEventListener('click', () => {
+      confirmRow.style.display = '';
+    });
+    confirmNo.addEventListener('click', () => {
+      confirmRow.style.display = 'none';
+    });
+    confirmYes.addEventListener('click', async () => {
+      confirmYes.disabled = true;
+      try {
+        await scrum77_api('/tasks/' + encodeURIComponent(task.id), { method: 'DELETE' });
+        await scrum77_load();
+      } catch (err) {
+        scrum77_setAlert(err.message || 'Failed to delete task');
+      } finally {
+        confirmYes.disabled = false;
+      }
+    });
+
+    right.appendChild(editBtn);
+    right.appendChild(delBtn);
+
+    actions.appendChild(selWrap);
+    actions.appendChild(right);
+    card.appendChild(actions);
+    card.appendChild(confirmRow);
+
+    return card;
+  }
+
+  function scrum77_render() {
+    const grouped = scrum77_groupByStatus(scrum77State.items);
+    scrum77_renderKPIs(grouped);
+
+    // Filter columns visibility
+    const f = scrum77State.filter;
+    for (const col of scrum77Dom.columns) {
+      const status = col.getAttribute('data-status');
+      col.style.display = (f === 'all' || f === status) ? '' : 'none';
+    }
+
+    // Render lists
+    const containers = {
+      todo: scrum77Dom.listTodo,
+      doing: scrum77Dom.listDoing,
+      done: scrum77Dom.listDone
+    };
+    for (const key of ['todo','doing','done']) {
+      const list = containers[key];
+      list.innerHTML = '';
+      const items = grouped[key];
+      if (!items || items.length === 0) {
+        list.innerHTML = '<div class="empty"><i class="bi bi-inbox"></i> No tasks</div>';
+      } else {
+        for (const t of items) {
+          list.appendChild(scrum77_taskCard(t));
+        }
+      }
+    }
+  }
+
+  // Modal handlers
+  function scrum77_openModal(taskOrStatus) {
+    // Reset alert
+    scrum77Dom.modalAlert.style.display = 'none';
+    scrum77Dom.modalAlert.textContent = '';
+
+    if (typeof taskOrStatus === 'object' && taskOrStatus !== null) {
+      // Edit
+      scrum77Dom.modalTitle.innerHTML = '<i class="bi bi-pencil-square"></i> Edit Task';
+      scrum77Dom.fieldId.value = taskOrStatus.id;
+      scrum77Dom.fieldTitle.value = taskOrStatus.title || '';
+      scrum77Dom.fieldDesc.value = taskOrStatus.description || '';
+      scrum77Dom.fieldStatus.value = taskOrStatus.status || 'todo';
+    } else {
+      // Create
+      const preStatus = (typeof taskOrStatus === 'string' && ['todo','doing','done'].includes(taskOrStatus)) ? taskOrStatus : 'todo';
+      scrum77Dom.modalTitle.innerHTML = '<i class="bi bi-clipboard-plus"></i> Add Task';
+      scrum77Dom.fieldId.value = '';
+      scrum77Dom.fieldTitle.value = '';
+      scrum77Dom.fieldDesc.value = '';
+      scrum77Dom.fieldStatus.value = preStatus;
+    }
+    scrum77Dom.modal.classList.add('open');
+    setTimeout(() => scrum77Dom.fieldTitle.focus(), 0);
+  }
+
+  function scrum77_closeModal() {
+    scrum77Dom.modal.classList.remove('open');
+  }
+
+  async function scrum77_submitForm(e) {
+    e.preventDefault();
+    scrum77Dom.modalAlert.style.display = 'none';
+    scrum77Dom.modalAlert.textContent = '';
+    const id = scrum77Dom.fieldId.value.trim();
+    const title = scrum77Dom.fieldTitle.value.trim();
+    const description = scrum77Dom.fieldDesc.value;
+    const status = scrum77Dom.fieldStatus.value;
+
+    if (!title) {
+      scrum77Dom.modalAlert.textContent = 'Title is required';
+      scrum77Dom.modalAlert.style.display = '';
+      return;
+    }
+    scrum77Dom.btnSave.disabled = true;
+
+    try {
+      if (id) {
+        await scrum77_api('/tasks/' + encodeURIComponent(id), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({ title, description, status })
+        });
+      } else {
+        await scrum77_api('/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({ title, description, status })
+        });
+      }
+      scrum77_closeModal();
+      await scrum77_load();
+    } catch (err) {
+      scrum77Dom.modalAlert.textContent = err.message || 'Failed to save task';
+      scrum77Dom.modalAlert.style.display = '';
+    } finally {
+      scrum77Dom.btnSave.disabled = false;
+    }
+  }
+
+  // Events
+  scrum77Dom.filters.addEventListener('click', (e) => {
+    const pill = e.target.closest('.pill[data-filter]');
+    if (!pill) return;
+    Array.from(scrum77Dom.filters.querySelectorAll('.pill')).forEach(p => p.classList.remove('active'));
+    pill.classList.add('active');
+    scrum77State.filter = pill.getAttribute('data-filter') || 'all';
+    scrum77_render();
+  });
+
+  scrum77Dom.btnAdd.addEventListener('click', () => scrum77_openModal('todo'));
+  document.querySelectorAll('button[data-add]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const status = e.currentTarget.getAttribute('data-add') || 'todo';
+      scrum77_openModal(status);
+    });
+  });
+  scrum77Dom.modalClose.addEventListener('click', scrum77_closeModal);
+  scrum77Dom.btnCancel.addEventListener('click', scrum77_closeModal);
+  scrum77Dom.form.addEventListener('submit', scrum77_submitForm);
+
+  // Initial load
+  scrum77_load();
+</script>
+      </div>
+      <div class="section" id="section-SCRUM-81">
+<div class="row controls">
+  <div>
+    <div class="filter-pills" id="SCRUM_81_filters">
+      <span class="pill active" data-filter="">All</span>
+      <span class="pill" data-filter="todo">Todo</span>
+      <span class="pill" data-filter="doing">Doing</span>
+      <span class="pill" data-filter="done">Done</span>
+    </div>
+  </div>
+  <div class="right">
+    <button class="btn btn-primary" id="SCRUM_81_newBtn"><i class="bi bi-plus"></i> New Task</button>
+  </div>
+</div>
+
+<div class="kpi-grid" id="SCRUM_81_kpis">
+  <div class="kpi-card">
+    <div class="label">Total Tasks</div>
+    <div class="value" data-kpi="total">-</div>
+    <div class="sub">All statuses</div>
+  </div>
+  <div class="kpi-card">
+    <div class="label">Todo</div>
+    <div class="value" data-kpi="todo">-</div>
+    <div class="sub">Awaiting work</div>
+  </div>
+  <div class="kpi-card">
+    <div class="label">Doing</div>
+    <div class="value" data-kpi="doing">-</div>
+    <div class="sub">In progress</div>
+  </div>
+  <div class="kpi-card">
+    <div class="label">Done</div>
+    <div class="value" data-kpi="done">-</div>
+    <div class="sub">Completed</div>
+  </div>
+</div>
+
+<div id="SCRUM_81_alert"></div>
+
+<div class="card" id="SCRUM_81_listCard">
+  <div id="SCRUM_81_list">
+    <div class="empty"><i class="bi bi-arrow-repeat"></i> Loading tasks…</div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="SCRUM_81_modal">
+  <div class="modal-box">
+    <div class="modal-close">
+      <button class="btn btn-secondary btn-sm" id="SCRUM_81_modalClose"><i class="bi bi-x"></i></button>
+    </div>
+    <h3 id="SCRUM_81_modalTitle">New Task</h3>
+    <div id="SCRUM_81_modalAlert"></div>
+    <form id="SCRUM_81_form">
+      <input type="hidden" name="id" />
+      <div class="row">
+        <label for="SCRUM_81_title">Title</label>
+        <input id="SCRUM_81_title" type="text" name="title" placeholder="Enter task title" required />
+      </div>
+      <div class="row">
+        <label for="SCRUM_81_status">Status</label>
+        <select id="SCRUM_81_status" name="status">
+          <option value="">Auto (defaults to "todo")</option>
+          <option value="todo">todo</option>
+          <option value="doing">doing</option>
+          <option value="done">done</option>
+        </select>
+      </div>
+      <div class="row" id="SCRUM_81_createdRow" style="display:none">
+        <label for="SCRUM_81_created">Created</label>
+        <input id="SCRUM_81_created" type="text" name="created_date" disabled />
+      </div>
+      <div class="controls right">
+        <button type="button" class="btn btn-secondary" id="SCRUM_81_cancelBtn">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="SCRUM_81_submitBtn"><i class="bi bi-save"></i> Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function(){
+  const SCRUM_81_state = {
+    items: [],
+    loading: false,
+    error: null,
+    filter: null, // "todo" | "doing" | "done" | null
+    sortKey: "id",
+    sortDir: "asc", // "asc" | "desc"
+    editing: null, // task object or null
+    sectionEl: document.getElementById("section-SCRUM-81")
+  };
+
+  const SCRUM_81_el = {
+    filters: document.getElementById("SCRUM_81_filters"),
+    newBtn: document.getElementById("SCRUM_81_newBtn"),
+    kpis: document.getElementById("SCRUM_81_kpis"),
+    alert: document.getElementById("SCRUM_81_alert"),
+    list: document.getElementById("SCRUM_81_list"),
+    modal: document.getElementById("SCRUM_81_modal"),
+    modalTitle: document.getElementById("SCRUM_81_modalTitle"),
+    modalAlert: document.getElementById("SCRUM_81_modalAlert"),
+    form: document.getElementById("SCRUM_81_form"),
+    formId: document.querySelector("#SCRUM_81_form [name='id']"),
+    formTitle: document.getElementById("SCRUM_81_title"),
+    formStatus: document.getElementById("SCRUM_81_status"),
+    formCreated: document.getElementById("SCRUM_81_created"),
+    createdRow: document.getElementById("SCRUM_81_createdRow"),
+    modalClose: document.getElementById("SCRUM_81_modalClose"),
+    cancelBtn: document.getElementById("SCRUM_81_cancelBtn"),
+    submitBtn: document.getElementById("SCRUM_81_submitBtn")
+  };
+
+  function SCRUM_81_setFilter(val){
+    SCRUM_81_state.filter = val || null;
+    // Update pills
+    Array.from(SCRUM_81_el.filters.querySelectorAll(".pill")).forEach(p=>{
+      if ((p.getAttribute("data-filter") || "") === (val || "")) p.classList.add("active");
+      else p.classList.remove("active");
+    });
+    SCRUM_81_load();
+  }
+
+  function SCRUM_81_sortBy(key){
+    if (SCRUM_81_state.sortKey === key){
+      SCRUM_81_state.sortDir = SCRUM_81_state.sortDir === "asc" ? "desc" : "asc";
+    } else {
+      SCRUM_81_state.sortKey = key;
+      SCRUM_81_state.sortDir = "asc";
+    }
+    SCRUM_81_render(); // client-side sort
+  }
+
+  function SCRUM_81_statusBadgeClass(status){
+    switch(status){
+      case "todo": return "badge badge-pending";
+      case "doing": return "badge badge-progress";
+      case "done": return "badge badge-done";
+      default: return "badge";
+    }
+  }
+
+  function SCRUM_81_showAlert(container, msg){
+    container.innerHTML = '<div class="alert-critical"><i class="bi bi-exclamation-triangle"></i> ' + escapeHtml(msg) + '</div>';
+  }
+  function SCRUM_81_clearAlert(container){
+    container.innerHTML = "";
+  }
+
+  function SCRUM_81_openModal(mode, task){
+    SCRUM_81_clearAlert(SCRUM_81_el.modalAlert);
+    if (mode === "create"){
+      SCRUM_81_el.modalTitle.textContent = "New Task";
+      SCRUM_81_el.formId.value = "";
+      SCRUM_81_el.formTitle.value = "";
+      // Ensure "Auto" option is present for create
+      ensureAutoOption(true);
+      SCRUM_81_el.formStatus.value = "";
+      SCRUM_81_el.createdRow.style.display = "none";
+      SCRUM_81_state.editing = null;
+    } else {
+      SCRUM_81_el.modalTitle.textContent = "Edit Task";
+      SCRUM_81_el.formId.value = String(task.id);
+      SCRUM_81_el.formTitle.value = task.title;
+      // Hide "Auto" option for edit
+      ensureAutoOption(false);
+      SCRUM_81_el.formStatus.value = task.status;
+      SCRUM_81_el.formCreated.value = task.created_date;
+      SCRUM_81_el.createdRow.style.display = "";
+      SCRUM_81_state.editing = task;
+    }
+    SCRUM_81_el.modal.classList.add("open");
+    setTimeout(()=>SCRUM_81_el.formTitle.focus(), 0);
+  }
+
+  function ensureAutoOption(show){
+    const opt = SCRUM_81_el.formStatus.querySelector("option[value='']");
+    if (show){
+      if (!opt){
+        const o = document.createElement("option");
+        o.value = "";
+        o.textContent = 'Auto (defaults to "todo")';
+        SCRUM_81_el.formStatus.insertBefore(o, SCRUM_81_el.formStatus.firstChild);
+      }
+    } else {
+      if (opt){
+        // If currently selected auto, switch to current editing status to avoid empty
+        if (SCRUM_81_el.formStatus.value === ""){
+          SCRUM_81_el.formStatus.value = SCRUM_81_state.editing ? SCRUM_81_state.editing.status : "todo";
+        }
+        opt.remove();
+      }
+    }
+  }
+
+  function SCRUM_81_closeModal(){
+    SCRUM_81_el.modal.classList.remove("open");
+  }
+
+  function SCRUM_81_setLoading(loading){
+    SCRUM_81_state.loading = loading;
+    if (loading){
+      SCRUM_81_el.list.innerHTML = '<div class="empty"><i class="bi bi-arrow-repeat"></i> Loading tasks…</div>';
+    }
+  }
+
+  async function SCRUM_81_load(){
+    SCRUM_81_setLoading(true);
+    SCRUM_81_clearAlert(SCRUM_81_el.alert);
+    const base = window.API_BASE || "";
+    const url = new URL(base.replace(/\/+$/,'') + "/tasks", window.location.origin);
+    if (SCRUM_81_state.filter){
+      url.searchParams.set("status", SCRUM_81_state.filter);
+    }
+    try {
+      const res = await fetch(url.toString(), { headers: { "Accept": "application/json" } });
+      if (!res.ok){
+        const err = await safeJson(res);
+        throw new Error(err && err.error ? err.error : "Failed to load tasks");
+      }
+      const data = await res.json();
+      SCRUM_81_state.items = Array.isArray(data) ? data : [];
+      SCRUM_81_render();
+    } catch (e){
+      SCRUM_81_state.items = [];
+      SCRUM_81_render(); // will render empty
+      SCRUM_81_showAlert(SCRUM_81_el.alert, e.message || "Error loading tasks");
+    } finally {
+      SCRUM_81_state.loading = false;
+    }
+  }
+
+  function SCRUM_81_render(){
+    // KPIs
+    const items = SCRUM_81_state.items.slice();
+    const counts = { total: items.length, todo: 0, doing: 0, done: 0 };
+    items.forEach(it => { if (counts[it.status] !== undefined) counts[it.status]++; });
+    SCRUM_81_kpiSet("total", counts.total);
+    SCRUM_81_kpiSet("todo", counts.todo);
+    SCRUM_81_kpiSet("doing", counts.doing);
+    SCRUM_81_kpiSet("done", counts.done);
+
+    // Sort client-side
+    const key = SCRUM_81_state.sortKey;
+    const dir = SCRUM_81_state.sortDir;
+    items.sort((a,b)=>{
+      let va = a[key], vb = b[key];
+      if (key === "id"){ va = Number(va); vb = Number(vb); }
+      const cmp = (va > vb) ? 1 : (va < vb ? -1 : 0);
+      return dir === "asc" ? cmp : -cmp;
+    });
+
+    // Table
+    if (items.length === 0){
+      SCRUM_81_el.list.innerHTML = '<div class="empty"><i class="bi bi-inbox"></i> No tasks found</div>';
+      return;
+    }
+    const rows = items.map(t=>{
+      return `
+        <tr data-id="${t.id}">
+          <td>${escapeHtml(String(t.id))}</td>
+          <td>${escapeHtml(t.title)}</td>
+          <td><span class="${SCRUM_81_statusBadgeClass(t.status)}">${escapeHtml(t.status)}</span></td>
+          <td>${escapeHtml(t.created_date)}</td>
+          <td style="white-space:nowrap">
+            <button class="btn btn-secondary btn-sm" data-action="edit" data-id="${t.id}"><i class="bi bi-pencil"></i></button>
+            <button class="btn btn-danger btn-sm" data-action="del" data-id="${t.id}"><i class="bi bi-trash"></i></button>
+            <span class="SCRUM_81_confirm" data-id="${t.id}" style="display:none; margin-left:8px">
+              Confirm? 
+              <button class="btn btn-danger btn-sm" data-action="confirm-del" data-id="${t.id}">Delete</button>
+              <button class="btn btn-secondary btn-sm" data-action="cancel-del" data-id="${t.id}">Cancel</button>
+            </span>
+          </td>
+        </tr>
+      `;
+    }).join("");
+
+    SCRUM_81_el.list.innerHTML = `
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th class="th-sortable" data-key="id">ID</th>
+            <th class="th-sortable" data-key="title">Title</th>
+            <th>Status</th>
+            <th class="th-sortable" data-key="created_date">Created</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+
+    // Attach table handlers
+    const tbody = SCRUM_81_el.list.querySelector("tbody");
+    tbody.addEventListener("click", SCRUM_81_tableClickHandler, { once: true });
+    const thead = SCRUM_81_el.list.querySelector("thead");
+    thead.addEventListener("click", SCRUM_81_tableHeadClickHandler, { once: true });
+  }
+
+  function SCRUM_81_tableClickHandler(e){
+    const btn = e.target.closest("button");
+    if (!btn) { // reattach for next clicks
+      this.addEventListener("click", SCRUM_81_tableClickHandler, { once: true });
+      return;
+    }
+    const id = Number(btn.getAttribute("data-id"));
+    const action = btn.getAttribute("data-action");
+    if (action === "edit"){
+      const task = SCRUM_81_state.items.find(x=>x.id === id);
+      if (task) SCRUM_81_openModal("edit", task);
+    } else if (action === "del"){
+      const row = SCRUM_81_el.list.querySelector(`tr[data-id="${id}"] .SCRUM_81_confirm`);
+      // hide any other confirms
+      SCRUM_81_el.list.querySelectorAll(".SCRUM_81_confirm").forEach(el=>{ el.style.display = "none"; });
+      if (row){ row.style.display = ""; }
+    } else if (action === "cancel-del"){
+      const row = SCRUM_81_el.list.querySelector(`tr[data-id="${id}"] .SCRUM_81_confirm`);
+      if (row){ row.style.display = "none"; }
+    } else if (action === "confirm-del"){
+      SCRUM_81_handleDelete(id);
+    }
+    // reattach for subsequent clicks
+    this.addEventListener("click", SCRUM_81_tableClickHandler, { once: true });
+  }
+
+  function SCRUM_81_tableHeadClickHandler(e){
+    const th = e.target.closest(".th-sortable");
+    if (th){
+      SCRUM_81_sortBy(th.getAttribute("data-key"));
+    }
+    this.addEventListener("click", SCRUM_81_tableHeadClickHandler, { once: true });
+  }
+
+  async function SCRUM_81_handleDelete(id){
+    SCRUM_81_clearAlert(SCRUM_81_el.alert);
+    const base = window.API_BASE || "";
+    try {
+      const res = await fetch(base.replace(/\/+$/,'') + "/tasks/" + encodeURIComponent(id), { method: "DELETE" });
+      if (!res.ok){
+        const err = await safeJson(res);
+        throw new Error(err && err.error ? err.error : "Failed to delete task");
+      }
+      await SCRUM_81_load();
+    } catch(e){
+      SCRUM_81_showAlert(SCRUM_81_el.alert, e.message || "Error deleting task");
+    }
+  }
+
+  async function SCRUM_81_submitForm(ev){
+    ev.preventDefault();
+    SCRUM_81_clearAlert(SCRUM_81_el.modalAlert);
+    const idVal = SCRUM_81_el.formId.value.trim();
+    const title = (SCRUM_81_el.formTitle.value || "").trim();
+    const status = SCRUM_81_el.formStatus.value;
+
+    if (title.length === 0){
+      SCRUM_81_showAlert(SCRUM_81_el.modalAlert, "Title is required and must be non-empty.");
+      SCRUM_81_el.formTitle.focus();
+      return;
+    }
+
+    const isCreate = idVal === "";
+    const base = window.API_BASE || "";
+    const endpoint = isCreate
+      ? base.replace(/\/+$/,'') + "/tasks"
+      : base.replace(/\/+$/,'') + "/tasks/" + encodeURIComponent(idVal);
+
+    const payload = { title: title };
+    if (isCreate){
+      if (status !== "") payload.status = status; // omit to use default 'todo'
+    } else {
+      payload.status = status; // on update we always send status chosen
+    }
+
+    try {
+      SCRUM_81_el.submitBtn.disabled = true;
+      SCRUM_81_el.submitBtn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Saving…';
+      const res = await fetch(endpoint, {
+        method: isCreate ? "POST" : "PUT",
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok){
+        const err = await safeJson(res);
+        throw new Error(err && err.error ? err.error : "Failed to save task");
+      }
+      // Success
+      SCRUM_81_closeModal();
+      await SCRUM_81_load();
+    } catch(e){
+      SCRUM_81_showAlert(SCRUM_81_el.modalAlert, e.message || "Error saving task");
+    } finally {
+      SCRUM_81_el.submitBtn.disabled = false;
+      SCRUM_81_el.submitBtn.innerHTML = '<i class="bi bi-save"></i> Save';
+    }
+  }
+
+  function SCRUM_81_kpiSet(key, value){
+    const el = SCRUM_81_el.kpis.querySelector('[data-kpi="'+key+'"]');
+    if (el) el.textContent = String(value);
+  }
+
+  function escapeHtml(s){
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  async function safeJson(res){
+    try { return await res.json(); } catch(_){ return null; }
+  }
+
+  function SCRUM_81_bind(){
+    // Filter pills
+    SCRUM_81_el.filters.addEventListener("click", (e)=>{
+      const pill = e.target.closest(".pill");
+      if (!pill) return;
+      const val = pill.getAttribute("data-filter") || "";
+      SCRUM_81_setFilter(val);
+    });
+    // New button
+    SCRUM_81_el.newBtn.addEventListener("click", ()=> SCRUM_81_openModal("create"));
+    // Modal controls
+    SCRUM_81_el.modalClose.addEventListener("click", SCRUM_81_closeModal);
+    SCRUM_81_el.cancelBtn.addEventListener("click", SCRUM_81_closeModal);
+    SCRUM_81_el.form.addEventListener("submit", SCRUM_81_submitForm);
+  }
+
+  function SCRUM_81_init(){
+    SCRUM_81_bind();
+    SCRUM_81_load();
+  }
+
+  // Initialize when this section exists
+  if (SCRUM_81_state.sectionEl){
+    SCRUM_81_init();
+  } else {
+    // Fallback: wait for DOM
+    document.addEventListener("DOMContentLoaded", SCRUM_81_init, { once: true });
+  }
+})();
+</script>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    window.API_BASE = 'http://localhost:5001';
+    const SECTIONS = [{"key": "SCRUM-77", "title": "Create, view, update, and delete tasks via a REST API and a single-page dashboard so that I can manage my work items end-to-end"}, {"key": "SCRUM-81", "title": "User, I want the system to enforce valid task data and sensible defaults so that my tasks are consistent and reliable"}];
+
+    // check API health on load
+    fetch(window.API_BASE + '/health').then(r => {
+      document.getElementById('api-status').innerHTML =
+        r.ok ? '<i class="bi bi-circle-fill" style="color:var(--low)"></i> API online'
+             : '<i class="bi bi-circle-fill" style="color:var(--high)"></i> API offline';
+    }).catch(() => {
+      document.getElementById('api-status').innerHTML =
+        '<i class="bi bi-circle-fill" style="color:var(--high)"></i> API offline — run run_demo.py';
+    });
+
+    function navigate(key) {
+      document.querySelectorAll('#sidebar nav a').forEach(a => a.classList.toggle('active', a.dataset.sec === key));
+      document.querySelectorAll('.section').forEach(s => s.classList.toggle('active', s.id === 'section-' + key));
+      const meta = SECTIONS.find(s => s.key === key);
+      if (meta) document.getElementById('topbar-title').textContent = meta.title;
+    }
+    document.querySelectorAll('#sidebar nav a').forEach(a => {
+      a.addEventListener('click', () => navigate(a.dataset.sec));
+    });
+    if (SECTIONS.length) navigate(SECTIONS[0].key);
+  </script>
+</body>
+</html>
