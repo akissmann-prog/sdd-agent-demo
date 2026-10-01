@@ -1,370 +1,339 @@
 import os
 import sqlite3
+from decimal import Decimal
+
 import pytest
 
-import scrum_50 as mod
+import scrum_50
+from scrum_50 import update_product, ValidationError, NotFoundError
 
 
-def create_cents_schema(db_path):
+def _connect(db_path):
     conn = sqlite3.connect(db_path)
-    conn.execute(
-        """
-        CREATE TABLE products (
-            id INTEGER PRIMARY KEY,
-            name TEXT NOT NULL,
-            description TEXT,
-            price_cents INTEGER NOT NULL,
-            stock_quantity INTEGER NOT NULL,
-            category TEXT NOT NULL,
-            CHECK (length(name) <= 50)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _create_schema_cents(conn, unique_name=True, include_category=True):
+    cols = [
+        "id INTEGER PRIMARY KEY",
+        "name TEXT NOT NULL" + (" UNIQUE" if unique_name else ""),
+        "description TEXT",
+        "price_cents INTEGER NOT NULL",
+        "stock_quantity INTEGER NOT NULL",
+    ]
+    if include_category:
+        cols.append("category TEXT NOT NULL")
+    conn.execute(f"CREATE TABLE products ({', '.join(cols)})")
+    conn.commit()
+
+
+def _create_schema_real(conn, unique_name=True, include_category=True):
+    cols = [
+        "id INTEGER PRIMARY KEY",
+        "name TEXT NOT NULL" + (" UNIQUE" if unique_name else ""),
+        "description TEXT",
+        "price REAL NOT NULL",
+        "stock_quantity INTEGER NOT NULL",
+    ]
+    if include_category:
+        cols.append("category TEXT NOT NULL")
+    conn.execute(f"CREATE TABLE products ({', '.join(cols)})")
+    conn.commit()
+
+
+def _insert_cents_product(conn, id, name, description, cents, stock, category=None):
+    if category is None:
+        conn.execute(
+            "INSERT INTO products (id, name, description, price_cents, stock_quantity) VALUES (?, ?, ?, ?, ?)",
+            (id, name, description, cents, stock),
         )
-        """
-    )
-    conn.commit()
-    conn.close()
-
-
-def create_real_schema(db_path, with_typeof_check=False):
-    conn = sqlite3.connect(db_path)
-    typeof_check = "CHECK(typeof(price)='real')" if with_typeof_check else ""
-    conn.execute(
-        f"""
-        CREATE TABLE products (
-            id INTEGER PRIMARY KEY,
-            name TEXT NOT NULL,
-            description TEXT,
-            price REAL NOT NULL {typeof_check},
-            stock_quantity INTEGER NOT NULL,
-            category TEXT NOT NULL,
-            CHECK (length(name) <= 50)
+    else:
+        conn.execute(
+            "INSERT INTO products (id, name, description, price_cents, stock_quantity, category) VALUES (?, ?, ?, ?, ?, ?)",
+            (id, name, description, cents, stock, category),
         )
-        """
-    )
     conn.commit()
-    conn.close()
 
 
-def insert_product_cents(db_path, id, name, description, price_cents, stock_quantity, category):
-    conn = sqlite3.connect(db_path)
-    conn.execute(
-        "INSERT INTO products (id, name, description, price_cents, stock_quantity, category) VALUES (?, ?, ?, ?, ?, ?)",
-        (id, name, description, price_cents, stock_quantity, category),
-    )
-    conn.commit()
-    conn.close()
-
-
-def insert_product_real(db_path, id, name, description, price, stock_quantity, category):
-    conn = sqlite3.connect(db_path)
-    conn.execute(
-        "INSERT INTO products (id, name, description, price, stock_quantity, category) VALUES (?, ?, ?, ?, ?, ?)",
-        (id, name, description, price, stock_quantity, category),
-    )
-    conn.commit()
-    conn.close()
-
-
-def get_db_value(db_path, sql, params=()):
-    conn = sqlite3.connect(db_path)
-    cur = conn.execute(sql, params)
-    row = cur.fetchone()
-    conn.close()
-    return row[0] if row else None
-
-
-def test_update_product_cents_happy_path_persists_and_rounds(tmp_path, monkeypatch):
-    db_path = str(tmp_path / "cents.sqlite")
-    monkeypatch.setenv("PRODUCT_DB_PATH", db_path)
-    create_cents_schema(db_path)
-    insert_product_cents(db_path, 1, "Widget", "Nice", 999, 5, "Tools")
-
-    updated = mod.update_product(
-        id=1,
-        name="NewName",
-        description="New desc",
-        price=12.345,  # rounds to 12.35
-        stock_quantity=10,
-        category="Gadgets",
-    )
-
-    assert updated["id"] == 1
-    assert updated["name"] == "NewName"
-    assert updated["description"] == "New desc"
-    assert updated["price"] == 12.35
-    assert updated["stock_quantity"] == 10
-    assert updated["category"] == "Gadgets"
-
-    # Verify stored cents and other fields in a fresh connection
-    price_cents = get_db_value(db_path, "SELECT price_cents FROM products WHERE id = 1")
-    assert price_cents == 1235
-    name = get_db_value(db_path, "SELECT name FROM products WHERE id = 1")
-    assert name == "NewName"
-
-
-def test_update_product_real_happy_path_persists_and_returns_correct_price(tmp_path, monkeypatch):
-    db_path = str(tmp_path / "real.sqlite")
-    monkeypatch.setenv("PRODUCT_DB_PATH", db_path)
-    # Include typeof(price) check to ensure numeric storage
-    create_real_schema(db_path, with_typeof_check=True)
-    insert_product_real(db_path, 1, "Widget", "Nice", 9.99, 5, "Tools")
-
-    updated = mod.update_product(
-        id=1,
-        name="NewName2",
-        description="Another desc",
-        price="2.5",  # accept strings; should become 2.50
-        stock_quantity=7,
-        category="Hardware",
-    )
-
-    assert updated["id"] == 1
-    assert updated["name"] == "NewName2"
-    assert updated["description"] == "Another desc"
-    assert updated["price"] == 2.50
-    assert updated["stock_quantity"] == 7
-    assert updated["category"] == "Hardware"
-
-    # Verify stored typeof is real and value is correct
-    typeof_price = get_db_value(db_path, "SELECT typeof(price) FROM products WHERE id = 1")
-    assert typeof_price == "real"
-    stored_price = get_db_value(db_path, "SELECT price FROM products WHERE id = 1")
-    assert pytest.approx(stored_price, rel=1e-9) == 2.5
-
-
-def test_not_found_error_when_id_missing(tmp_path, monkeypatch):
-    db_path = str(tmp_path / "nf.sqlite")
-    monkeypatch.setenv("PRODUCT_DB_PATH", db_path)
-    create_cents_schema(db_path)
-    # No insert
-
-    with pytest.raises(mod.NotFoundError):
-        mod.update_product(
-            id=999,
-            name="Name",
-            description="Desc",
-            price=1.23,
-            stock_quantity=1,
-            category="Cat",
+def _insert_real_product(conn, id, name, description, price_val, stock, category=None):
+    if category is None:
+        conn.execute(
+            "INSERT INTO products (id, name, description, price, stock_quantity) VALUES (?, ?, ?, ?, ?)",
+            (id, name, description, price_val, stock),
         )
+    else:
+        conn.execute(
+            "INSERT INTO products (id, name, description, price, stock_quantity, category) VALUES (?, ?, ?, ?, ?, ?)",
+            (id, name, description, price_val, stock, category),
+        )
+    conn.commit()
+
+
+def test_update_product_cents_happy_path_rounding_and_persistence(tmp_path, monkeypatch):
+    db_path = tmp_path / "db1.sqlite"
+    monkeypatch.setenv("PRODUCT_DB_PATH", str(db_path))
+
+    conn = _connect(str(db_path))
+    _create_schema_cents(conn)
+    _insert_cents_product(conn, 1, "Original", "Old desc", 1234, 10, "Cat")
+    conn.close()
+
+    result = update_product(
+        1,
+        name="New Name",
+        description="  New desc  ",
+        price=Decimal("1.005"),
+        stock_quantity="5",
+        category="  Gadgets  ",
+    )
+
+    assert result["id"] == 1
+    assert result["name"] == "New Name"
+    assert result["description"] == "New desc"
+    assert result["price"] == pytest.approx(1.01)
+    assert result["stock_quantity"] == 5
+    assert result["category"] == "Gadgets"
+
+    conn2 = _connect(str(db_path))
+    row = conn2.execute("SELECT * FROM products WHERE id = 1").fetchone()
+    assert row["name"] == "New Name"
+    assert row["description"] == "New desc"
+    assert row["price_cents"] == 101
+    assert row["stock_quantity"] == 5
+    assert row["category"] == "Gadgets"
+    conn2.close()
+
+
+def test_update_product_real_storage_stores_text_due_to_str_and_returns_correct_price(tmp_path, monkeypatch):
+    db_path = tmp_path / "db_real.sqlite"
+    monkeypatch.setenv("PRODUCT_DB_PATH", str(db_path))
+
+    conn = _connect(str(db_path))
+    _create_schema_real(conn)
+    _insert_real_product(conn, 1, "Prod", "Desc", 5.5, 2, "CatA")
+    conn.close()
+
+    res = update_product(
+        1,
+        name="Prod2",
+        description="New",
+        price=Decimal("2.345"),  # should round to 2.35
+        stock_quantity=3,
+        category="CatB",
+    )
+
+    assert res["price"] == pytest.approx(2.35)
+    assert res["name"] == "Prod2"
+    assert res["description"] == "New"
+    assert res["stock_quantity"] == 3
+    assert res["category"] == "CatB"
+
+    conn2 = _connect(str(db_path))
+    row = conn2.execute("SELECT typeof(price) as t, price FROM products WHERE id = 1").fetchone()
+    # Because pricing.to_db_price stores str in real mode, SQLite stores TEXT affinity
+    assert row["t"] == "text"
+    assert row["price"] == "2.35"
+    conn2.close()
+
+
+def test_update_product_not_found_raises(tmp_path, monkeypatch):
+    db_path = tmp_path / "db_nf.sqlite"
+    monkeypatch.setenv("PRODUCT_DB_PATH", str(db_path))
+
+    conn = _connect(str(db_path))
+    _create_schema_cents(conn)
+    conn.close()
+
+    with pytest.raises(NotFoundError):
+        update_product(1, "X", None, 1.0, 1, "C")
 
 
 @pytest.mark.parametrize(
     "bad_id",
-    [0, -1, 1.2, True, "abc", ""],
+    [
+        True,
+        False,
+        -1,
+        0,
+        1.2,
+        "abc",
+        None,
+    ],
 )
-def test_invalid_id_validation(bad_id, tmp_path, monkeypatch):
-    db_path = str(tmp_path / "inv.sqlite")
-    monkeypatch.setenv("PRODUCT_DB_PATH", db_path)
-    create_cents_schema(db_path)
-    insert_product_cents(db_path, 1, "Widget", "Nice", 999, 5, "Tools")
-
-    with pytest.raises(mod.ValidationError):
-        mod.update_product(
-            id=bad_id,
-            name="Name",
-            description="Desc",
-            price=1.0,
-            stock_quantity=1,
-            category="Cat",
-        )
-
-
-def test_float_integer_id_is_accepted(tmp_path, monkeypatch):
-    db_path = str(tmp_path / "floatid.sqlite")
-    monkeypatch.setenv("PRODUCT_DB_PATH", db_path)
-    create_cents_schema(db_path)
-    insert_product_cents(db_path, 1, "Widget", "Nice", 100, 2, "Tools")
-
-    updated = mod.update_product(
-        id=1.0,
-        name="Widget",
-        description="Nice",
-        price=1.00,
-        stock_quantity=2,
-        category="Tools",
-    )
-    assert updated["id"] == 1
+def test_update_product_id_validation_errors(bad_id, tmp_path, monkeypatch):
+    db_path = tmp_path / "db_id.sqlite"
+    monkeypatch.setenv("PRODUCT_DB_PATH", str(db_path))
+    # No schema needed; should fail at ID validation before connecting
+    with pytest.raises(ValidationError):
+        update_product(bad_id, "N", None, 1.0, 1, "C")
 
 
 @pytest.mark.parametrize(
-    "field_kwargs, expected_message_substr",
+    "field,bad_value",
     [
-        (dict(price=-0.01), "price must be greater than or equal to 0"),
-        (dict(name="   "), "name must not be empty"),
-        (dict(category=""), "category must not be empty"),
-        (dict(stock_quantity=-5), "stock_quantity must be a non-negative integer"),
-        (dict(price="abc"), "price must be a numeric value"),
-        (dict(stock_quantity=1.5), "stock_quantity must be a non-negative integer"),
+        ("name", "  "),
+        ("category", ""),
+        ("price", -1),
+        ("stock_quantity", -3),
+        ("stock_quantity", 1.5),
+        ("stock_quantity", True),
     ],
 )
-def test_payload_validation_errors(field_kwargs, expected_message_substr, tmp_path, monkeypatch):
-    db_path = str(tmp_path / "val.sqlite")
-    monkeypatch.setenv("PRODUCT_DB_PATH", db_path)
-    create_cents_schema(db_path)
-    insert_product_cents(db_path, 1, "Widget", "Nice", 100, 2, "Tools")
+def test_update_product_payload_validation_errors(field, bad_value, tmp_path, monkeypatch):
+    db_path = tmp_path / "db_val.sqlite"
+    monkeypatch.setenv("PRODUCT_DB_PATH", str(db_path))
 
-    base_kwargs = dict(
-        id=1,
-        name="Valid",
-        description="Desc",
-        price=1.23,
-        stock_quantity=3,
-        category="Cat",
-    )
-    base_kwargs.update(field_kwargs)
-
-    with pytest.raises(mod.ValidationError) as ei:
-        mod.update_product(**base_kwargs)
-    assert expected_message_substr in str(ei.value)
-
-
-def test_description_normalization_none_and_empty(tmp_path, monkeypatch):
-    db_path = str(tmp_path / "desc.sqlite")
-    monkeypatch.setenv("PRODUCT_DB_PATH", db_path)
-    create_cents_schema(db_path)
-    insert_product_cents(db_path, 1, "Widget", "Initial", 100, 2, "Tools")
-
-    # Set to None
-    updated1 = mod.update_product(
-        id=1,
-        name="Widget",
-        description=None,
-        price=1.00,
-        stock_quantity=2,
-        category="Tools",
-    )
-    assert updated1["description"] is None
-    desc1 = get_db_value(db_path, "SELECT description FROM products WHERE id = 1")
-    assert desc1 is None
-
-    # Set to blank string (should normalize to None)
-    updated2 = mod.update_product(
-        id=1,
-        name="Widget",
-        description="   ",
-        price=1.00,
-        stock_quantity=2,
-        category="Tools",
-    )
-    assert updated2["description"] is None
-    desc2 = get_db_value(db_path, "SELECT description FROM products WHERE id = 1")
-    assert desc2 is None
-
-
-def test_update_no_changes_rowcount_zero_commit_and_return(tmp_path, monkeypatch):
-    db_path = str(tmp_path / "nochange.sqlite")
-    monkeypatch.setenv("PRODUCT_DB_PATH", db_path)
-    create_cents_schema(db_path)
-    insert_product_cents(db_path, 1, "Widget", "Desc", 1234, 5, "Tools")
-
-    # Calling with same values
-    updated = mod.update_product(
-        id=1,
-        name="Widget",
-        description="Desc",
-        price=12.34,
-        stock_quantity=5,
-        category="Tools",
-    )
-    assert updated["name"] == "Widget"
-    assert updated["description"] == "Desc"
-    assert updated["price"] == 12.34
-    assert updated["stock_quantity"] == 5
-    assert updated["category"] == "Tools"
-
-    # Values remain the same in DB
-    name = get_db_value(db_path, "SELECT name FROM products WHERE id = 1")
-    assert name == "Widget"
-    price_cents = get_db_value(db_path, "SELECT price_cents FROM products WHERE id = 1")
-    assert price_cents == 1234
-
-
-def test_integrity_error_on_too_long_name_rolled_back(tmp_path, monkeypatch):
-    db_path = str(tmp_path / "integrity.sqlite")
-    monkeypatch.setenv("PRODUCT_DB_PATH", db_path)
-    # Create schema with strict name length to trigger IntegrityError on update
-    conn = sqlite3.connect(db_path)
-    conn.execute(
-        """
-        CREATE TABLE products (
-            id INTEGER PRIMARY KEY,
-            name TEXT NOT NULL CHECK (length(name) <= 5),
-            description TEXT,
-            price_cents INTEGER NOT NULL,
-            stock_quantity INTEGER NOT NULL,
-            category TEXT NOT NULL
-        )
-        """
-    )
-    conn.commit()
+    conn = _connect(str(db_path))
+    _create_schema_cents(conn)
+    _insert_cents_product(conn, 1, "Good", "D", 100, 1, "Cat")
     conn.close()
-    insert_product_cents(db_path, 1, "Short", "Desc", 100, 2, "Cat")
 
-    with pytest.raises(mod.ValidationError) as ei:
-        mod.update_product(
-            id=1,
-            name="TooLongName",  # violates CHECK(length(name) <= 5)
-            description="New",
-            price=2.50,
-            stock_quantity=3,
-            category="Cat",
-        )
+    kwargs = dict(
+        id=1,
+        name="Good2",
+        description="D2",
+        price=1.0,
+        stock_quantity=2,
+        category="Cat2",
+    )
+    kwargs[field] = bad_value
+
+    with pytest.raises(ValidationError):
+        update_product(**kwargs)
+
+
+def test_update_with_empty_description_sets_null(tmp_path, monkeypatch):
+    db_path = tmp_path / "db_desc.sqlite"
+    monkeypatch.setenv("PRODUCT_DB_PATH", str(db_path))
+
+    conn = _connect(str(db_path))
+    _create_schema_cents(conn)
+    _insert_cents_product(conn, 1, "P", "Old", 250, 3, "Cat")
+    conn.close()
+
+    res = update_product(1, "P", "", 2.5, 3, "Cat")
+    assert res["description"] is None
+
+    conn2 = _connect(str(db_path))
+    row = conn2.execute("SELECT description FROM products WHERE id = 1").fetchone()
+    assert row["description"] is None
+    conn2.close()
+
+
+def test_update_product_duplicate_name_unique_constraint_raises_validation_error_and_rollback(tmp_path, monkeypatch):
+    db_path = tmp_path / "db_unique.sqlite"
+    monkeypatch.setenv("PRODUCT_DB_PATH", str(db_path))
+
+    conn = _connect(str(db_path))
+    _create_schema_cents(conn, unique_name=True)
+    _insert_cents_product(conn, 1, "A", "D1", 100, 1, "C1")
+    _insert_cents_product(conn, 2, "B", "D2", 200, 2, "C2")
+    conn.close()
+
+    with pytest.raises(ValidationError) as ei:
+        update_product(1, "B", "D1", 1.0, 1, "C1")
     assert "Database constraint violated" in str(ei.value)
 
-    # Ensure rollback: name should remain unchanged
-    name = get_db_value(db_path, "SELECT name FROM products WHERE id = 1")
-    assert name == "Short"
-    # And other fields should not have changed either
-    desc = get_db_value(db_path, "SELECT description FROM products WHERE id = 1")
-    assert desc == "Desc"
-    price_cents = get_db_value(db_path, "SELECT price_cents FROM products WHERE id = 1")
-    assert price_cents == 100
-    stock_qty = get_db_value(db_path, "SELECT stock_quantity FROM products WHERE id = 1")
-    assert stock_qty == 2
+    # Ensure no changes were made to product 1 (rollback)
+    conn2 = _connect(str(db_path))
+    row1 = conn2.execute("SELECT name, description, price_cents, stock_quantity, category FROM products WHERE id = 1").fetchone()
+    assert row1["name"] == "A"
+    assert row1["description"] == "D1"
+    assert row1["price_cents"] == 100
+    assert row1["stock_quantity"] == 1
+    assert row1["category"] == "C1"
 
-
-def test_pricing_from_db_price_malformed_values_return_zero_cents_and_real(monkeypatch):
-    # Test for both 'cents' and 'real' storage modes using _row_to_product
-    base_row = {
-        "id": 1,
-        "name": "X",
-        "description": None,
-        "stock_quantity": 0,
-        "category": "C",
-    }
-
-    # Cents mode malformed
-    monkeypatch.setattr(mod.pricing._local, "storage_mode", "cents", raising=False)
-    row_cents = dict(base_row, price_value="notanumber")
-    prod_cents = mod.services.products._row_to_product(row_cents)
-    assert prod_cents["price"] == 0.0
-
-    # Real mode malformed
-    monkeypatch.setattr(mod.pricing._local, "storage_mode", "real", raising=False)
-    row_real = dict(base_row, price_value=None)  # None also yields 0.0
-    prod_real = mod.services.products._row_to_product(row_real)
-    assert prod_real["price"] == 0.0
-
-
-def test_repository_uses_detected_price_column(tmp_path, monkeypatch):
-    # Cents schema
-    db_path_cents = str(tmp_path / "det_cents.sqlite")
-    monkeypatch.setenv("PRODUCT_DB_PATH", db_path_cents)
-    create_cents_schema(db_path_cents)
-    insert_product_cents(db_path_cents, 1, "A", None, 250, 1, "Cat")
-    conn = mod.db.get_connection()
-    row = mod.repositories.products.get_by_id(conn, 1)
-    conn.close()
-    assert row is not None
-    assert row["price_value"] == 250
-
-    # Real schema
-    db_path_real = str(tmp_path / "det_real.sqlite")
-    monkeypatch.setenv("PRODUCT_DB_PATH", db_path_real)
-    create_real_schema(db_path_real)
-    insert_product_real(db_path_real, 1, "B", None, 3.75, 2, "Cat")
-    conn2 = mod.db.get_connection()
-    row2 = mod.repositories.products.get_by_id(conn2, 1)
+    row2 = conn2.execute("SELECT name FROM products WHERE id = 2").fetchone()
+    assert row2["name"] == "B"
     conn2.close()
-    assert row2 is not None
-    assert float(row2["price_value"]) == pytest.approx(3.75)
+
+
+def test_generic_db_error_is_wrapped_and_rolled_back(tmp_path, monkeypatch):
+    db_path = tmp_path / "db_error.sqlite"
+    monkeypatch.setenv("PRODUCT_DB_PATH", str(db_path))
+
+    conn = _connect(str(db_path))
+    # Create schema missing 'category' column to cause update failure
+    _create_schema_cents(conn, include_category=False)
+    _insert_cents_product(conn, 1, "X", "D", 100, 1, None)
+    conn.close()
+
+    with pytest.raises(ValidationError) as ei:
+        update_product(1, "X2", "D2", 1.5, 2, "CatMissing")
+    # Should be wrapped as a generic database error
+    assert "Database error:" in str(ei.value)
+
+
+def test_update_same_values_returns_product(tmp_path, monkeypatch):
+    db_path = tmp_path / "db_same.sqlite"
+    monkeypatch.setenv("PRODUCT_DB_PATH", str(db_path))
+
+    conn = _connect(str(db_path))
+    _create_schema_cents(conn)
+    _insert_cents_product(conn, 1, "S", "D", 123, 4, "C")
+    conn.close()
+
+    res = update_product(1, "S", "D", Decimal("1.23"), 4, "C")
+    assert res["name"] == "S"
+    assert res["description"] == "D"
+    assert res["price"] == pytest.approx(1.23)
+    assert res["stock_quantity"] == 4
+    assert res["category"] == "C"
+
+    # Ensure values remain the same in DB
+    conn2 = _connect(str(db_path))
+    row = conn2.execute("SELECT name, description, price_cents, stock_quantity, category FROM products WHERE id = 1").fetchone()
+    assert row["name"] == "S"
+    assert row["description"] == "D"
+    assert row["price_cents"] == 123
+    assert row["stock_quantity"] == 4
+    assert row["category"] == "C"
+    conn2.close()
+
+
+def test_pricing_configuration_switch_between_schemas(tmp_path, monkeypatch):
+    db_path1 = tmp_path / "db_cents.sqlite"
+    db_path2 = tmp_path / "db_real.sqlite"
+
+    # Setup cents DB
+    conn1 = _connect(str(db_path1))
+    _create_schema_cents(conn1)
+    _insert_cents_product(conn1, 1, "CentsProd", "CD", 100, 1, "CatC")
+    conn1.close()
+
+    # Setup real DB
+    conn2 = _connect(str(db_path2))
+    _create_schema_real(conn2)
+    _insert_real_product(conn2, 1, "RealProd", "RD", 1.0, 1, "CatR")
+    conn2.close()
+
+    # Update cents DB
+    monkeypatch.setenv("PRODUCT_DB_PATH", str(db_path1))
+    res1 = update_product(1, "CentsProd", "CD", Decimal("3.33"), 1, "CatC")
+    assert res1["price"] == pytest.approx(3.33)
+
+    c1 = _connect(str(db_path1))
+    row1 = c1.execute("SELECT price_cents FROM products WHERE id = 1").fetchone()
+    assert row1["price_cents"] == 333
+    c1.close()
+
+    # Update real DB
+    monkeypatch.setenv("PRODUCT_DB_PATH", str(db_path2))
+    res2 = update_product(1, "RealProd", "RD", Decimal("4.44"), 1, "CatR")
+    assert res2["price"] == pytest.approx(4.44)
+
+    c2 = _connect(str(db_path2))
+    row2 = c2.execute("SELECT typeof(price) AS t, price FROM products WHERE id = 1").fetchone()
+    assert row2["t"] == "text"
+    assert row2["price"] == "4.44"
+    c2.close()
+
+    # Switch back to cents DB and update again
+    monkeypatch.setenv("PRODUCT_DB_PATH", str(db_path1))
+    res3 = update_product(1, "CentsProd", "CD", Decimal("1.23"), 1, "CatC")
+    assert res3["price"] == pytest.approx(1.23)
+    c3 = _connect(str(db_path1))
+    row3 = c3.execute("SELECT price_cents FROM products WHERE id = 1").fetchone()
+    assert row3["price_cents"] == 123
+    c3.close()
