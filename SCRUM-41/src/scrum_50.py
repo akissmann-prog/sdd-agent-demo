@@ -125,7 +125,7 @@ class validators:
                 ivalue = int(value)
             elif isinstance(value, float):
                 if not value.is_integer():
-                    raise ValidationError(f"{field} must be an integer value")
+                    raise ValidationError(f"{field} must be a non-negative integer")
                 ivalue = int(value)
             else:
                 ivalue = int(str(value).strip())
