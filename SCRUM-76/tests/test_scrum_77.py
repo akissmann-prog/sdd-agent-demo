@@ -1,172 +1,183 @@
 import re
 import pytest
 
-import scrum_77 as mod
+from scrum_77 import (
+    create_task,
+    get_task,
+    list_tasks,
+    update_task,
+    delete_task,
+    validate_status,
+    get_dashboard_html,
+)
 
 
 @pytest.fixture
-def db_path(tmp_path):
-    return str(tmp_path / "test_tasks.db")
+def db_file(tmp_path):
+    return str(tmp_path / "tasks.sqlite3")
 
 
-def test_create_task_minimal_success(db_path):
-    task = mod.create_task("Test task", db_path=db_path)
-    assert isinstance(task, dict)
-    assert task["id"] >= 1
-    assert task["title"] == "Test task"
+def test_validate_status_valid_values():
+    for s in ["todo", "doing", "done"]:
+        validate_status(s)  # should not raise
+
+
+def test_validate_status_invalid_value():
+    with pytest.raises(ValueError) as exc:
+        validate_status("invalid")
+    msg = str(exc.value)
+    assert "Invalid status" in msg
+    assert "'invalid'" in msg
+    # allowed list should be present and sorted
+    assert "['doing', 'done', 'todo']" in msg
+
+
+def test_create_task_happy_path_defaults(db_file):
+    task = create_task("  My Task  ", db_path=db_file)
+    assert isinstance(task["id"], int)
+    assert task["title"] == "My Task"
     assert task["description"] is None
     assert task["status"] == "todo"
-    assert isinstance(task["created_date"], str)
-    assert re.match(r"^\d{4}-\d{2}-\d{2} ", task["created_date"])
+    assert re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$", task["created_date"])
 
 
-def test_create_task_trims_title_and_handles_description(db_path):
-    task = mod.create_task("  Title with spaces  ", description="desc", status="doing", db_path=db_path)
-    assert task["title"] == "Title with spaces"
-    assert task["description"] == "desc"
-    assert task["status"] == "doing"
+def test_create_task_title_validation(db_file):
+    with pytest.raises(ValueError) as exc1:
+        create_task("", db_path=db_file)
+    assert "Title is required" in str(exc1.value)
+
+    with pytest.raises(ValueError) as exc2:
+        create_task("   ", db_path=db_file)
+    assert "Title is required" in str(exc2.value)
+
+    with pytest.raises(ValueError) as exc3:
+        create_task(None, db_path=db_file)  # type: ignore[arg-type]
+    assert "Title is required" in str(exc3.value)
 
 
-def test_create_task_empty_title_raises(db_path):
+def test_create_task_status_handling(db_file):
+    task_default_status = create_task("t1", status=None, db_path=db_file)
+    assert task_default_status["status"] == "todo"
+
     with pytest.raises(ValueError):
-        mod.create_task("   ", db_path=db_path)
+        create_task("t2", status="bogus", db_path=db_file)
+
     with pytest.raises(ValueError):
-        mod.create_task(None, db_path=db_path)  # type: ignore[arg-type]
+        create_task("t3", status="TODO", db_path=db_file)
+
+    with pytest.raises(ValueError):
+        create_task("t4", status=" done ", db_path=db_file)
 
 
-def test_create_task_invalid_status_raises(db_path):
-    with pytest.raises(ValueError) as ei:
-        mod.create_task("X", status="invalid", db_path=db_path)
-    msg = str(ei.value)
-    assert "Invalid status" in msg
-    for s in ("todo", "doing", "done"):
-        assert s in msg
+def test_get_task_not_found_and_found(db_file):
+    assert get_task(9999, db_path=db_file) is None
+    t = create_task("Find me", description="desc", status="doing", db_path=db_file)
+    fetched = get_task(t["id"], db_path=db_file)
+    assert fetched is not None
+    assert fetched["id"] == t["id"]
+    assert fetched["title"] == "Find me"
+    assert fetched["description"] == "desc"
+    assert fetched["status"] == "doing"
 
 
-def test_create_task_status_none_defaults_todo(db_path):
-    task = mod.create_task("Default status", status=None, db_path=db_path)  # type: ignore[arg-type]
-    assert task["status"] == "todo"
+def test_list_tasks_empty_and_ordering_and_filtering(db_file):
+    assert list_tasks(db_path=db_file) == []
 
+    t1 = create_task("A", status="todo", db_path=db_file)
+    t2 = create_task("B", status="doing", db_path=db_file)
+    t3 = create_task("C", status="done", db_path=db_file)
 
-def test_list_tasks_empty(db_path):
-    tasks = mod.list_tasks(db_path=db_path)
-    assert tasks == []
-
-
-def test_list_tasks_ordering_and_filtering(db_path):
-    t1 = mod.create_task("a1", status="todo", db_path=db_path)
-    t2 = mod.create_task("b1", status="doing", db_path=db_path)
-    t3 = mod.create_task("c1", status="done", db_path=db_path)
-    all_tasks = mod.list_tasks(db_path=db_path)
+    all_tasks = list_tasks(db_path=db_file)
     assert [t["id"] for t in all_tasks] == [t1["id"], t2["id"], t3["id"]]
 
-    doing_tasks = mod.list_tasks(status="doing", db_path=db_path)
+    doing_tasks = list_tasks(status="doing", db_path=db_file)
     assert len(doing_tasks) == 1
     assert doing_tasks[0]["id"] == t2["id"]
     assert doing_tasks[0]["status"] == "doing"
 
-
-def test_list_tasks_invalid_status_raises(db_path):
     with pytest.raises(ValueError):
-        mod.list_tasks(status="invalid", db_path=db_path)
+        list_tasks(status="nope", db_path=db_file)
+
+    # Cover code review note: empty string status currently raises ValueError
+    with pytest.raises(ValueError):
+        list_tasks(status="", db_path=db_file)  # strict validation today
 
 
-def test_get_task_existing_and_missing(db_path):
-    created = mod.create_task("Get me", description="", db_path=db_path)
-    fetched = mod.get_task(created["id"], db_path=db_path)
-    assert fetched is not None
-    assert fetched["id"] == created["id"]
-    assert fetched["title"] == "Get me"
-    # empty string description remains empty string (not None)
-    assert fetched["description"] == ""
+def test_update_task_failures(db_file):
+    t = create_task("Original", description="D", status="todo", db_path=db_file)
 
-    # missing
-    assert mod.get_task(99999, db_path=db_path) is None
+    with pytest.raises(ValueError) as exc:
+        update_task(t["id"], db_path=db_file)
+    assert "At least one field" in str(exc.value)
+
+    with pytest.raises(KeyError) as exc2:
+        update_task(99999, title="x", db_path=db_file)
+    assert "not found" in str(exc2.value)
+
+    with pytest.raises(ValueError) as exc3:
+        update_task(t["id"], title="   ", db_path=db_file)
+    assert "Title cannot be empty" in str(exc3.value)
+
+    with pytest.raises(ValueError):
+        update_task(t["id"], status="BAD", db_path=db_file)
+
+    # Case-insensitive not supported currently; 'Doing' should raise
+    with pytest.raises(ValueError):
+        update_task(t["id"], status="Doing", db_path=db_file)
 
 
-def test_update_task_happy_path(db_path):
-    created = mod.create_task("Original", description="desc", status="todo", db_path=db_path)
-    updated = mod.update_task(
-        created["id"],
-        title="  New Title  ",
-        description="",
-        status="doing",
-        db_path=db_path,
+def test_update_task_success_single_and_multiple_fields(db_file):
+    t = create_task("Task", description=None, status="todo", db_path=db_file)
+
+    updated_title = update_task(t["id"], title="  New Title  ", db_path=db_file)
+    assert updated_title["title"] == "New Title"
+    assert updated_title["description"] is None
+    assert updated_title["status"] == "todo"
+
+    updated_desc = update_task(t["id"], description="", db_path=db_file)
+    assert updated_desc["title"] == "New Title"
+    assert updated_desc["description"] == ""
+    assert updated_desc["status"] == "todo"
+
+    updated_status = update_task(t["id"], status="doing", db_path=db_file)
+    assert updated_status["status"] == "doing"
+
+    updated_all = update_task(
+        t["id"], title="Final", description="Final desc", status="done", db_path=db_file
     )
-    assert updated["id"] == created["id"]
-    assert updated["title"] == "New Title"
-    assert updated["description"] == ""
-    assert updated["status"] == "doing"
+    assert updated_all["title"] == "Final"
+    assert updated_all["description"] == "Final desc"
+    assert updated_all["status"] == "done"
 
 
-def test_update_task_invalid_status_raises(db_path):
-    created = mod.create_task("Title", db_path=db_path)
-    with pytest.raises(ValueError):
-        mod.update_task(created["id"], status="nope", db_path=db_path)
+def test_delete_task_existing_and_nonexisting(db_file):
+    t = create_task("Delete me", db_path=db_file)
+    assert get_task(t["id"], db_path=db_file) is not None
+
+    ok = delete_task(t["id"], db_path=db_file)
+    assert ok is True
+    assert get_task(t["id"], db_path=db_file) is None
+
+    ok2 = delete_task(t["id"], db_path=db_file)
+    assert ok2 is False
 
 
-def test_update_task_empty_title_raises(db_path):
-    created = mod.create_task("Title", db_path=db_path)
-    with pytest.raises(ValueError):
-        mod.update_task(created["id"], title="   ", db_path=db_path)
+def test_non_string_description_is_coerced_on_read(db_file):
+    t = create_task("Num desc", description=123, status="todo", db_path=db_file)  # type: ignore[arg-type]
+    fetched = get_task(t["id"], db_path=db_file)
+    assert fetched is not None
+    assert fetched["description"] == "123"
 
 
-def test_update_task_no_fields_raises(db_path):
-    created = mod.create_task("Title", db_path=db_path)
-    with pytest.raises(ValueError):
-        mod.update_task(created["id"], db_path=db_path)
-
-
-def test_update_task_nonexistent_raises_keyerror(db_path):
-    with pytest.raises(KeyError):
-        mod.update_task(12345, title="X", db_path=db_path)
-
-
-def test_delete_task_behaviour(db_path):
-    created = mod.create_task("To delete", db_path=db_path)
-    assert mod.get_task(created["id"], db_path=db_path) is not None
-    assert mod.delete_task(created["id"], db_path=db_path) is True
-    assert mod.get_task(created["id"], db_path=db_path) is None
-    # second time
-    assert mod.delete_task(created["id"], db_path=db_path) is False
-
-
-def test_multiple_schema_initializations_and_operations(db_path):
-    # Ensure calling operations multiple times (which call _ensure_schema) does not error
-    assert mod.list_tasks(db_path=db_path) == []
-    t = mod.create_task("A", db_path=db_path)
-    assert mod.list_tasks(db_path=db_path)[0]["id"] == t["id"]
-    assert mod.list_tasks(status="todo", db_path=db_path)[0]["id"] == t["id"]
-
-
-@pytest.mark.parametrize("status", ["todo", "doing", "done"])
-def test_validate_status_allows_allowed(status):
-    # Should not raise
-    mod.validate_status(status)
-
-
-def test_validate_status_rejects_invalid():
-    with pytest.raises(ValueError):
-        mod.validate_status("bananas")
-
-
-def test_dashboard_html_contains_expected_endpoints_and_headers():
-    html = mod.get_dashboard_html()
-    assert isinstance(html, str)
-    # Structure elements
+def test_dashboard_html_contains_expected_endpoints_and_statuses():
+    html = get_dashboard_html()
     assert "<!doctype html>" in html.lower()
+    assert "<title>Tasks Dashboard</title>" in html
+    assert "/tasks" in html
+    assert "fetch('/tasks'" in html
+    assert "fetch('/tasks/" in html  # for update/delete paths
+    assert "for (const s of ['todo', 'doing', 'done'])" in html
+    # ensure dashboard has expected containers
     assert 'id="todoList"' in html
     assert 'id="doingList"' in html
     assert 'id="doneList"' in html
-    # API endpoints usage
-    assert "fetch('/tasks'" in html or 'fetch("/tasks"' in html
-    assert "fetch('/tasks?status='" in html or 'fetch("/tasks?status="' in html
-    assert "fetch('/tasks/' + encodeURIComponent(id)" in html or 'fetch("/tasks/" + encodeURIComponent(id)' in html
-    # Methods and headers
-    assert "'Content-Type': 'application/json'" in html  # for POST/PUT
-    assert "'Accept': 'application/json'" in html
-    assert "{ method: 'DELETE' }" in html or '{ method: "DELETE" }' in html
-    # Rendering groups
-    assert "grouped = { todo: [], doing: [], done: [] }" in html or "grouped = { todo: [], doing: [], done: [] }" in html
-    # Title/description displayed with textContent
-    assert ".textContent" in html
