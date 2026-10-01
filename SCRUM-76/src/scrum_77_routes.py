@@ -2,10 +2,11 @@ from flask import Blueprint, request, jsonify, Response
 from config import DB_PATH
 from scrum_77 import create_task, get_task, list_tasks, update_task, delete_task, get_dashboard_html
 
-bp = Blueprint('scrum_77', __name__)
+bp_scrum_77 = Blueprint('scrum_77', __name__)
+bp = bp_scrum_77
 
 
-@bp.route('/tasks', methods=['GET'])
+@bp_scrum_77.route('/tasks', methods=['GET'])
 def list_tasks_route():
     """List all tasks, optionally filtered by status via ?status="""
     status = request.args.get('status')
@@ -18,7 +19,7 @@ def list_tasks_route():
         return jsonify({"error": "Internal server error"}), 500
 
 
-@bp.route('/tasks/<int:task_id>', methods=['GET'])
+@bp_scrum_77.route('/tasks/<int:task_id>', methods=['GET'])
 def get_task_route(task_id: int):
     """Retrieve a single task by ID"""
     try:
@@ -30,7 +31,7 @@ def get_task_route(task_id: int):
         return jsonify({"error": "Internal server error"}), 500
 
 
-@bp.route('/tasks', methods=['POST'])
+@bp_scrum_77.route('/tasks', methods=['POST'])
 def create_task_route():
     """Create a new task"""
     data = request.get_json(silent=True)
@@ -50,7 +51,7 @@ def create_task_route():
         return jsonify({"error": "Internal server error"}), 500
 
 
-@bp.route('/tasks/<int:task_id>', methods=['PUT'])
+@bp_scrum_77.route('/tasks/<int:task_id>', methods=['PUT'])
 def update_task_route(task_id: int):
     """Update an existing task's fields"""
     data = request.get_json(silent=True)
@@ -73,7 +74,7 @@ def update_task_route(task_id: int):
         return jsonify({"error": "Internal server error"}), 500
 
 
-@bp.route('/tasks/<int:task_id>', methods=['DELETE'])
+@bp_scrum_77.route('/tasks/<int:task_id>', methods=['DELETE'])
 def delete_task_route(task_id: int):
     """Delete a task by ID"""
     try:
@@ -85,7 +86,7 @@ def delete_task_route(task_id: int):
         return jsonify({"error": "Internal server error"}), 500
 
 
-@bp.route('/dashboard', methods=['GET'])
+@bp_scrum_77.route('/dashboard', methods=['GET'])
 def dashboard_route():
     """Serve the single-page tasks dashboard"""
     try:
