@@ -265,7 +265,10 @@ def get_dashboard_html() -> str:
       return res.json();
     },
     async remove(id) {
-      const res = await fetch('/tasks/' + encodeURIComponent(id), { method: 'DELETE' });
+      const res = await fetch('/tasks/' + encodeURIComponent(id), {
+        method: 'DELETE',
+        headers: { 'Accept': 'application/json' }
+      });
       if (!res.ok) {
         const msg = await safeError(res);
         throw new Error(msg || 'Failed to delete task');
