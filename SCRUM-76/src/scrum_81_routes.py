@@ -11,6 +11,7 @@ from scrum_81 import (
 )
 
 bp = Blueprint('scrum_81', __name__)
+bp_scrum_81 = bp
 
 
 def _task_to_dict(t):
@@ -31,7 +32,7 @@ def list_tasks():
         return jsonify([_task_to_dict(t) for t in tasks]), 200
     except ValidationError as e:
         return jsonify({"error": str(e)}), 400
-    except Exception as e:
+    except Exception:
         return jsonify({"error": "Internal server error"}), 500
 
 
