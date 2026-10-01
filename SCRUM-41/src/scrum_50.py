@@ -27,6 +27,7 @@ import sqlite3
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from typing import Any, Dict, Optional, TypedDict
+import threading
 
 
 # =========================
@@ -77,6 +78,11 @@ class db:
         db_path = os.getenv(_DB_PATH_ENV, _DEFAULT_DB_PATH)
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
+        # Enforce foreign key constraints
+        try:
+            conn.execute("PRAGMA foreign_keys=ON")
+        except sqlite3.Error:
+            pass
         # Ensure pricing storage configuration is detected for this connection
         pricing.ensure_price_configuration(conn)
         return conn
@@ -200,18 +206,19 @@ class pricing:
     - "cents": store integer cents in column "price_cents" (INTEGER)
     - "real": store real number in column "price" (REAL)
 
-    The module maintains global configuration after detection.
+    The module maintains thread-local configuration after detection to avoid cross-thread interference.
     """
-    _storage_mode: Optional[str] = None  # "cents" or "real"
-    _price_column: Optional[str] = None  # "price_cents" or "price"
+    _local = threading.local()
 
     @classmethod
     def ensure_price_configuration(cls, conn: sqlite3.Connection) -> None:
         """
-        Detect and cache the price storage configuration from the schema.
-        Idempotent.
+        Detect and set the price storage configuration from the schema for the current thread.
+        Idempotent per-thread.
         """
-        if cls._storage_mode is not None and cls._price_column is not None:
+        mode = getattr(cls._local, "storage_mode", None)
+        col = getattr(cls._local, "price_column", None)
+        if mode is not None and col is not None:
             return
 
         try:
@@ -219,34 +226,38 @@ class pricing:
             rows = cursor.fetchall()
         except sqlite3.Error:
             # If schema introspection fails, default to cents strategy
-            cls._storage_mode = "cents"
-            cls._price_column = "price_cents"
+            setattr(cls._local, "storage_mode", "cents")
+            setattr(cls._local, "price_column", "price_cents")
             return
 
         cols = {row["name"].lower(): (row["type"] or "").upper() for row in rows}
         if "price_cents" in cols:
-            cls._storage_mode = "cents"
-            cls._price_column = "price_cents"
+            storage_mode = "cents"
+            price_column = "price_cents"
         elif "price" in cols:
             sql_type = cols["price"]
             if "INT" in sql_type:
-                cls._storage_mode = "cents"
-                cls._price_column = "price"
+                storage_mode = "cents"
+                price_column = "price"
             else:
                 # Assume REAL or NUMERIC stores direct currency value
-                cls._storage_mode = "real"
-                cls._price_column = "price"
+                storage_mode = "real"
+                price_column = "price"
         else:
             # Default to cents strategy if price column not present
-            cls._storage_mode = "cents"
-            cls._price_column = "price_cents"
+            storage_mode = "cents"
+            price_column = "price_cents"
+
+        setattr(cls._local, "storage_mode", storage_mode)
+        setattr(cls._local, "price_column", price_column)
 
     @classmethod
     def get_price_column(cls) -> str:
-        if cls._price_column is None:
+        col = getattr(cls._local, "price_column", None)
+        if col is None:
             # default fallback
             return "price_cents"
-        return cls._price_column
+        return col
 
     @classmethod
     def to_db_price(cls, price: Decimal) -> Any:
@@ -254,19 +265,19 @@ class pricing:
         Convert normalized API price (Decimal) to database storage form
         according to detected storage mode.
         """
-        mode = cls._storage_mode or "cents"
+        mode = getattr(cls._local, "storage_mode", None) or "cents"
         if mode == "cents":
             cents = int((price * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
             return cents
-        # real storage: store as Decimal string to avoid float bin issues; sqlite3 will coerce
-        return float(price)
+        # real storage: store as string to preserve exact 2dp
+        return str(price)
 
     @classmethod
     def from_db_price(cls, db_value: Any) -> float:
         """
         Convert stored database price value to API representation (float).
         """
-        mode = cls._storage_mode or "cents"
+        mode = getattr(cls._local, "storage_mode", None) or "cents"
         if db_value is None:
             return 0.0
         if mode == "cents":
@@ -357,7 +368,14 @@ class services:
             try:
                 if isinstance(id, bool):
                     raise ValidationError("id must be a positive integer")
-                id_int = int(id)
+                if isinstance(id, int):
+                    id_int = int(id)
+                elif isinstance(id, float):
+                    if not id.is_integer():
+                        raise ValidationError("id must be a positive integer")
+                    id_int = int(id)
+                else:
+                    id_int = int(str(id).strip())
             except (ValueError, TypeError):
                 raise ValidationError("id must be a positive integer")
             if id_int <= 0:
@@ -392,23 +410,18 @@ class services:
 
                 # Execute update
                 try:
-                    affected = repositories.products.update(conn, id_int, fields)
+                    repositories.products.update(conn, id_int, fields)
                 except sqlite3.IntegrityError as e:
                     conn.rollback()
                     raise ValidationError(f"Database constraint violated: {e}")
 
-                if affected == 0:
-                    # Defensive: possible concurrent delete
-                    conn.rollback()
-                    raise NotFoundError(f"Product with id {id_int} not found")
-
-                # Commit transaction
+                # Commit transaction regardless of rowcount (SQLite may return 0 when values are identical)
                 conn.commit()
 
                 # Reload updated record
                 updated_row = repositories.products.get_by_id(conn, id_int)
                 if updated_row is None:
-                    # Extremely unlikely after commit; treat as not found
+                    # Treat as not found only if row truly disappeared
                     raise NotFoundError(f"Product with id {id_int} not found after update")
 
                 return services.products._row_to_product(updated_row)
