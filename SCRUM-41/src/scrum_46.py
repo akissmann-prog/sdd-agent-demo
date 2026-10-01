@@ -5,13 +5,16 @@ Feature: List and retrieve products from a SQLite-backed catalog.
 
 This module exposes two primary API functions:
 - list_products(): returns all product records as a list of dicts.
-- get_product_by_id(id): returns a single product dict by ID or raises NotFoundError.
+- get_product_by_id(product_id): returns a single product dict by ID or raises NotFoundError.
 
 Design notes:
 - Uses a read-only SQLite connection via URI to prevent accidental writes.
+- Additionally sets PRAGMA query_only = ON to enforce read-only behavior at the session level.
 - Connections are opened and closed per call to reflect the latest committed DB state.
 - Uses sqlite3.Row for convenient dict(row) mapping.
 - Queries are parameterized to avoid SQL injection.
+- Prices are represented as Python floats; be aware of potential floating point precision/rounding.
+  If exact currency handling is required, consider using Decimal in a future revision.
 """
 
 from __future__ import annotations
@@ -19,7 +22,8 @@ from __future__ import annotations
 import os
 import sqlite3
 import time
-from typing import Any, Callable, Optional, Sequence, TypedDict
+from pathlib import Path
+from typing import Any, Callable, Optional, Sequence, TypedDict, cast
 from urllib.parse import quote
 
 
@@ -41,13 +45,20 @@ def _build_ro_uri(db_path: str) -> str:
     Build a read-only SQLite URI for the provided database path.
 
     Ensures absolute pathing and proper escaping for URI usage.
+    Expands '~' and normalizes to forward slashes for cross-platform safety.
     """
     if not db_path or not isinstance(db_path, str):
         raise ValueError("db_path must be a non-empty string")
-    abs_path = os.path.abspath(db_path)
-    # Escape path for URI; keep path separators as-is.
-    escaped = quote(abs_path, safe="/:\\")
-    return f"file:{escaped}?mode=ro&cache=shared"
+    expanded = os.path.expanduser(db_path)
+    abs_path = Path(expanded).resolve()
+    as_posix = abs_path.as_posix()
+    # Escape path for URI; keep path separators and drive colon (Windows) as-is.
+    escaped = quote(as_posix, safe="/:")
+    if as_posix.startswith("/"):
+        base = f"file://{escaped}"
+    else:
+        base = f"file:///{escaped}"
+    return f"{base}?mode=ro&cache=shared"
 
 
 def get_ro_connection(db_path: str) -> sqlite3.Connection:
@@ -58,6 +69,8 @@ def get_ro_connection(db_path: str) -> sqlite3.Connection:
     # isolation_level=None enables autocommit; uri=True enables URI parsing.
     conn = sqlite3.connect(uri, uri=True, isolation_level=None, timeout=5.0)
     conn.row_factory = sqlite3.Row
+    # Enforce read-only behavior at the session level as well.
+    conn.execute("PRAGMA query_only = ON;")
     return conn
 
 
@@ -75,6 +88,8 @@ class ProductRepository:
         """
         Return all products as a list of dicts with keys:
         id, name, description, price, stock_quantity, category.
+
+        Results are ordered by id ascending.
         """
         sql = (
             "SELECT id, name, description, price, stock_quantity, category "
@@ -100,7 +115,7 @@ class ProductRepository:
 
     def _fetch_all(self, sql: str, params: Sequence[Any]) -> list[sqlite3.Row]:
         """
-        Execute a SELECT returning multiple rows, with a single retry on DatabaseError.
+        Execute a SELECT returning multiple rows, with a single retry on lock contention.
         """
         def _op() -> list[sqlite3.Row]:
             with get_ro_connection(self._db_path) as conn:
@@ -111,7 +126,7 @@ class ProductRepository:
 
     def _fetch_one(self, sql: str, params: Sequence[Any]) -> Optional[sqlite3.Row]:
         """
-        Execute a SELECT returning a single row, with a single retry on DatabaseError.
+        Execute a SELECT returning a single row, with a single retry on lock contention.
         """
         def _op() -> Optional[sqlite3.Row]:
             with get_ro_connection(self._db_path) as conn:
@@ -123,26 +138,31 @@ class ProductRepository:
     @staticmethod
     def _with_retry(op: Callable[[], Any]) -> Any:
         """
-        Execute the callable, retrying once on sqlite3.DatabaseError after a short delay.
+        Execute the callable, retrying once on sqlite3.OperationalError due to lock contention.
         """
         try:
             return op()
-        except sqlite3.DatabaseError:
-            # Brief backoff then retry once
-            time.sleep(0.05)
-            return op()
+        except sqlite3.OperationalError as e:
+            msg = str(e).lower()
+            if "database is locked" in msg or "database is busy" in msg or "locked" in msg:
+                time.sleep(0.1)
+                return op()
+            raise
 
     @staticmethod
     def _row_to_product_dict(row: sqlite3.Row) -> ProductRecord:
         data = dict(row)
-        # Type assertions for ProductRecord
-        return ProductRecord(
-            id=int(data["id"]),
-            name=data["name"],
-            description=data.get("description"),
-            price=float(data["price"]),
-            stock_quantity=int(data["stock_quantity"]),
-            category=data.get("category"),
+        # Return a plain dict and cast for typing purposes.
+        return cast(
+            ProductRecord,
+            {
+                "id": int(data["id"]),
+                "name": data["name"],
+                "description": data.get("description"),
+                "price": float(data["price"]),
+                "stock_quantity": int(data["stock_quantity"]),
+                "category": data.get("category"),
+            },
         )
 
 
@@ -174,6 +194,9 @@ def list_products() -> list[dict]:
     """
     Return all product records as a list of dicts with keys:
     id, name, description, price, stock_quantity, category.
+
+    Results are ordered by id ascending.
+    Prices are floats; see module docstring for precision considerations.
     """
     repo = _get_repository()
     # Return plain dicts (not TypedDict instances) as per acceptance criteria
@@ -182,16 +205,17 @@ def list_products() -> list[dict]:
     return [dict(p) for p in products]
 
 
-def get_product_by_id(id: int) -> dict:
+def get_product_by_id(product_id: int) -> dict:
     """
     Return a single product record by id or raise NotFoundError if not found.
 
-    Validates that id is an integer > 0.
+    Validates that product_id is an integer > 0.
+    Prices are floats; see module docstring for precision considerations.
     """
-    if not isinstance(id, int) or id <= 0:
-        raise ValueError("id must be an integer greater than 0")
+    if not isinstance(product_id, int) or product_id <= 0:
+        raise ValueError("product_id must be an integer greater than 0")
     repo = _get_repository()
-    product = repo.get_product_by_id(id)
+    product = repo.get_product_by_id(product_id)
     return dict(product)
 
 
