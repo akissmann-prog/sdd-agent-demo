@@ -38,7 +38,7 @@ class SchemaManager:
                     company TEXT NOT NULL CHECK(trim(company) <> ''),
                     role TEXT NOT NULL CHECK(trim(role) <> ''),
                     status TEXT NOT NULL DEFAULT 'applied' CHECK(status IN ('applied','interviewing','offer','rejected')),
-                    applied_date TEXT NOT NULL DEFAULT (date('now')) CHECK(applied_date GLOB '____-__-__'),
+                    applied_date TEXT NOT NULL DEFAULT CURRENT_DATE CHECK(applied_date GLOB '____-__-__'),
                     notes TEXT
                 )
                 """
