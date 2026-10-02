@@ -59,7 +59,7 @@ def _today_utc_ymd() -> str:
 
 
 def _normalize_status(value: str) -> str:
-    return value.lower().trim()
+    return value.lower().strip()
 
 
 def _trim_string(value: Optional[str]) -> Optional[str]:
