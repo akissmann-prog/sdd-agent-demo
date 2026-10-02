@@ -14,7 +14,7 @@ import re
 import sqlite3
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 
 ALLOWED_STATUS = {"applied", "interviewing", "offer", "rejected"}
@@ -40,7 +40,7 @@ class NotFoundError(AppError):
 
 
 def _utc_today() -> str:
-    """Return today's date in UTC in YYYY-MM-DD format."""
+    """Return today's date in YYYY-MM-DD format."""
     return date.today().isoformat()
 
 
@@ -267,12 +267,10 @@ def update_application(
     with sqlite3.connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         _ensure_schema(conn)
-        cur = conn.execute(
+        conn.execute(
             f"UPDATE applications SET {', '.join(set_clauses)} WHERE id = ?",
             tuple(values),
         )
-        if cur.rowcount == 0:
-            raise NotFoundError(f"Application with id {app_id} not found")
         conn.commit()
         row = conn.execute(
             "SELECT id, company, role, status, applied_date, notes FROM applications WHERE id = ?",
