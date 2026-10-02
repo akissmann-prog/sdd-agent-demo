@@ -87,3 +87,7 @@ def remove_application(app_id: str):
     if code == 204:
         return "", 204
     return jsonify(body), code
+
+
+# Expose commonly expected blueprint variable name for the app loader
+scrum_147_bp = bp
