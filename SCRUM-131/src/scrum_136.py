@@ -199,47 +199,23 @@ class ApplicationRepo:
         SchemaManager.ensure_schema(db_path)
         with _connect(db_path) as conn:
             cur = conn.cursor()
-            # Build an INSERT that includes all columns and uses DEFAULT where appropriate
-            placeholders: List[str] = []
-            params: List[Any] = []
 
-            # id: explicit NULL to use AUTOINCREMENT while including the column
-            placeholders.append("NULL")
+            # Build dynamic INSERT specifying only provided columns
+            columns: List[str] = ["company", "role"]
+            params: List[Any] = [data["company"], data["role"]]
 
-            # company
-            placeholders.append("?")
-            params.append(data["company"])
-
-            # role
-            placeholders.append("?")
-            params.append(data["role"])
-
-            # status
             if "status" in data:
-                placeholders.append("?")
+                columns.append("status")
                 params.append(data["status"])
-            else:
-                placeholders.append("DEFAULT")
-
-            # applied_date
             if "applied_date" in data:
-                placeholders.append("?")
+                columns.append("applied_date")
                 params.append(data["applied_date"])
-            else:
-                placeholders.append("DEFAULT")
-
-            # notes (nullable)
             if "notes" in data:
-                placeholders.append("?")
+                columns.append("notes")
                 params.append(data["notes"])
-            else:
-                # Explicit NULL if not provided
-                placeholders.append("NULL")
 
-            sql = (
-                "INSERT INTO applications (id, company, role, status, applied_date, notes) "
-                f"VALUES ({', '.join(placeholders)})"
-            )
+            placeholders = ", ".join(["?"] * len(columns))
+            sql = f"INSERT INTO applications ({', '.join(columns)}) VALUES ({placeholders})"
             cur.execute(sql, tuple(params))
             new_id = cur.lastrowid
 
@@ -250,7 +226,6 @@ class ApplicationRepo:
             )
             row = cur.fetchone()
             if not row:
-                # Unexpected; but return a minimal record structure
                 raise sqlite3.DatabaseError("Failed to retrieve created application")
             conn.commit()
             return ApplicationRepo._row_to_dict(row)
