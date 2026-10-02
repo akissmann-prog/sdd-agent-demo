@@ -1,5 +1,10 @@
 from flask import Blueprint, request, jsonify
-from config import DB_PATH
+try:
+    from config import DB_PATH as _DB_PATH
+except Exception:
+    _DB_PATH = "demo.db"
+DB_PATH = _DB_PATH
+
 from scrum_103 import (
     list_applications,
     get_application,
