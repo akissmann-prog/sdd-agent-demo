@@ -66,6 +66,8 @@ class ConflictError(AppError):
 
 def _connect(db_path: str) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path)
+    # Enable WAL for better concurrency
+    conn.execute("PRAGMA journal_mode=WAL")
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -84,6 +86,9 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
     )
     """
     conn.execute(sql)
+    # Basic indexes to support common queries and groupings
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_applications_applied_date ON applications(applied_date)")
 
 
 def _row_to_application(row: sqlite3.Row) -> Application:
