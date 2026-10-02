@@ -1,0 +1,1461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>User Registry</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    /* ── Fiori Horizon tokens ───────────────────────────────── */
+    :root{
+      --fiori-bg:#f2f2f2; --fiori-surface:#ffffff;
+      --fiori-border:#e5e5e5; --fiori-text:#1d2d3e; --fiori-muted:#556b82;
+      --fiori-accent:#0070f2; --fiori-accent-dk:#0057c2;
+      --fiori-header:#354a5e;
+      --fiori-positive:#256f3a; --fiori-negative:#aa0808;
+      --fiori-caution:#e9730c; --fiori-info:#0070f2;
+      --fiori-radius:.5rem; --fiori-radius-sm:.25rem;
+      --fiori-shadow:0 2px 8px rgba(0,0,0,.08);
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{display:flex;flex-direction:column;height:100vh;overflow:hidden;
+          background:var(--fiori-bg);font-family:'72','Segoe UI',Arial,sans-serif;
+          color:var(--fiori-text);font-size:14px}
+    a{color:var(--fiori-accent);text-decoration:none}
+
+    /* ── Shell header ───────────────────────────────────────── */
+    #shell-header{
+      height:44px;background:var(--fiori-header);color:#fff;
+      display:flex;align-items:center;padding:0 16px;gap:12px;
+      flex-shrink:0;z-index:50;
+      box-shadow:0 2px 4px rgba(0,0,0,.2);
+    }
+    #shell-header .shell-logo{
+      display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px;
+      letter-spacing:.02em;
+    }
+    #shell-header .shell-logo i{font-size:18px}
+    #shell-header .shell-right{margin-left:auto;display:flex;align-items:center;gap:12px}
+    #api-status{font-size:11px;color:rgba(255,255,255,.75);display:flex;align-items:center;gap:4px}
+
+    /* ── Body layout ────────────────────────────────────────── */
+    #body{display:flex;flex:1;overflow:hidden}
+
+    /* ── Sidebar ────────────────────────────────────────────── */
+    #sidebar{
+      width:220px;background:var(--fiori-surface);
+      border-right:1px solid var(--fiori-border);
+      display:flex;flex-direction:column;flex-shrink:0;
+      overflow-y:auto;
+    }
+    #sidebar .side-group-label{
+      font-size:10px;font-weight:700;color:var(--fiori-muted);
+      text-transform:uppercase;letter-spacing:.06em;
+      padding:16px 16px 6px;
+    }
+    #sidebar nav a{
+      display:flex;align-items:center;gap:10px;
+      padding:10px 16px;font-size:13px;color:var(--fiori-text);
+      border-left:3px solid transparent;cursor:pointer;
+      transition:background .12s,color .12s;
+    }
+    #sidebar nav a:hover{background:#f0f4ff;color:var(--fiori-accent)}
+    #sidebar nav a.active{
+      background:#e8f2ff;color:var(--fiori-accent);
+      border-left-color:var(--fiori-accent);font-weight:600;
+    }
+    #sidebar nav a i{font-size:15px;flex-shrink:0}
+    #sidebar .side-footer{
+      margin-top:auto;padding:12px 16px;
+      font-size:11px;color:var(--fiori-muted);
+      border-top:1px solid var(--fiori-border);
+    }
+
+    /* ── Main content ───────────────────────────────────────── */
+    #main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
+    #page-header{
+      height:48px;background:var(--fiori-surface);
+      border-bottom:1px solid var(--fiori-border);
+      display:flex;align-items:center;padding:0 20px;gap:8px;flex-shrink:0;
+    }
+    #page-title{font-weight:600;font-size:15px;color:var(--fiori-text)}
+    #content{flex:1;overflow-y:auto;padding:20px}
+
+    /* ── Sections ───────────────────────────────────────────── */
+    .section{display:none} .section.active{display:block}
+
+    /* ── Buttons ────────────────────────────────────────────── */
+    .fd-btn{
+      display:inline-flex;align-items:center;gap:6px;
+      padding:7px 16px;border-radius:var(--fiori-radius-sm);
+      font-size:13px;font-weight:500;cursor:pointer;
+      font-family:inherit;border:1px solid transparent;
+      transition:background .12s,border-color .12s;
+    }
+    .fd-btn--primary{background:var(--fiori-accent);color:#fff;border-color:var(--fiori-accent)}
+    .fd-btn--primary:hover{background:var(--fiori-accent-dk);border-color:var(--fiori-accent-dk)}
+    .fd-btn--secondary{background:#fff;color:var(--fiori-accent);border-color:var(--fiori-accent)}
+    .fd-btn--secondary:hover{background:#e8f2ff}
+    .fd-btn--negative{background:var(--fiori-negative);color:#fff;border-color:var(--fiori-negative)}
+    .fd-btn--negative:hover{background:#8a0606}
+    .fd-btn--sm{padding:4px 10px;font-size:12px}
+    .fd-btn:disabled{opacity:.45;cursor:not-allowed}
+
+    /* ── Status badges ──────────────────────────────────────── */
+    .fd-status{
+      display:inline-flex;align-items:center;gap:4px;
+      padding:2px 8px;border-radius:10px;font-size:11px;font-weight:500;
+    }
+    .fd-status--positive{background:#edf7f0;color:var(--fiori-positive)}
+    .fd-status--negative{background:#fdecea;color:var(--fiori-negative)}
+    .fd-status--caution{background:#fff4ec;color:var(--fiori-caution)}
+    .fd-status--info{background:#e8f2ff;color:var(--fiori-info)}
+    .fd-status--neutral{background:#f2f2f2;color:var(--fiori-muted)}
+
+    /* ── KPI ────────────────────────────────────────────────── */
+    .fd-kpi-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+    .fd-kpi{
+      background:var(--fiori-surface);border:1px solid var(--fiori-border);
+      border-radius:var(--fiori-radius);box-shadow:var(--fiori-shadow);
+      padding:16px 20px;flex:1;min-width:140px;
+    }
+    .fd-kpi__label{font-size:11px;color:var(--fiori-muted);text-transform:uppercase;letter-spacing:.04em}
+    .fd-kpi__value{font-size:28px;font-weight:700;color:var(--fiori-text);margin-top:4px}
+    .fd-kpi__sub{font-size:12px;color:var(--fiori-muted);margin-top:2px}
+
+    /* ── Panel ──────────────────────────────────────────────── */
+    .fd-panel{
+      background:var(--fiori-surface);border:1px solid var(--fiori-border);
+      border-radius:var(--fiori-radius);box-shadow:var(--fiori-shadow);
+      padding:16px;margin-bottom:16px;
+    }
+    .fd-panel__header{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+    .fd-panel__title{font-size:15px;font-weight:600;color:var(--fiori-text)}
+    .fd-panel__toolbar{margin-left:auto;display:flex;gap:8px;align-items:center}
+
+    /* ── Table ──────────────────────────────────────────────── */
+    .fd-table{width:100%;border-collapse:collapse;background:var(--fiori-surface)}
+    .fd-table th{
+      font-size:12px;font-weight:600;color:var(--fiori-muted);text-align:left;
+      padding:10px 14px;border-bottom:2px solid var(--fiori-accent);
+      text-transform:uppercase;letter-spacing:.04em;background:var(--fiori-surface);
+    }
+    .fd-table td{
+      padding:10px 14px;border-bottom:1px solid var(--fiori-border);
+      font-size:13px;vertical-align:middle;
+    }
+    .fd-table tr:last-child td{border-bottom:none}
+    .fd-table tr:hover td{background:#f0f4ff}
+
+    /* ── Form ───────────────────────────────────────────────── */
+    .fd-form-group{margin-bottom:14px}
+    .fd-form-group label{
+      display:block;font-size:11px;font-weight:600;color:var(--fiori-muted);
+      text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;
+    }
+    .fd-input{
+      width:100%;padding:8px 10px;border:1px solid var(--fiori-border);
+      border-radius:var(--fiori-radius-sm);font-size:13px;font-family:inherit;
+      background:var(--fiori-surface);color:var(--fiori-text);
+      transition:border-color .12s;
+    }
+    .fd-input:focus{outline:none;border-color:var(--fiori-accent);
+      box-shadow:0 0 0 2px rgba(0,112,242,.15)}
+
+    /* ── Inline messages ────────────────────────────────────── */
+    .fd-msg{padding:8px 12px;border-radius:var(--fiori-radius-sm);font-size:13px;margin-bottom:8px}
+    .fd-msg--error{background:#fdecea;border-left:3px solid var(--fiori-negative)}
+    .fd-msg--success{background:#edf7f0;border-left:3px solid var(--fiori-positive)}
+    .fd-msg--info{background:#e8f2ff;border-left:3px solid var(--fiori-info)}
+
+    /* ── Dialog ─────────────────────────────────────────────── */
+    .fd-dialog-overlay{
+      display:none;position:fixed;inset:0;
+      background:rgba(29,45,62,.45);z-index:200;
+      align-items:center;justify-content:center;
+    }
+    .fd-dialog-overlay.open{display:flex}
+    .fd-dialog{
+      background:var(--fiori-surface);border-radius:var(--fiori-radius);
+      box-shadow:0 8px 32px rgba(0,0,0,.18);
+      max-width:540px;width:95%;max-height:90vh;overflow-y:auto;
+      padding:24px;position:relative;
+    }
+    .fd-dialog__header{display:flex;align-items:center;margin-bottom:20px}
+    .fd-dialog__title{font-size:16px;font-weight:600;color:var(--fiori-text)}
+    .fd-dialog__close{
+      position:absolute;top:12px;right:12px;background:none;border:none;
+      cursor:pointer;font-size:18px;color:var(--fiori-muted);
+    }
+    .fd-dialog__footer{display:flex;justify-content:flex-end;gap:8px;margin-top:20px;padding-top:16px;border-top:1px solid var(--fiori-border)}
+
+    /* ── Toolbar ─────────────────────────────────────────────── */
+    .fd-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+    .fd-search{
+      padding:7px 12px;border:1px solid var(--fiori-border);
+      border-radius:var(--fiori-radius-sm);font-size:13px;min-width:200px;
+      font-family:inherit;
+    }
+    .fd-search:focus{outline:none;border-color:var(--fiori-accent)}
+
+    /* ── Empty state ─────────────────────────────────────────── */
+    .fd-empty{text-align:center;padding:48px 20px;color:var(--fiori-muted)}
+    .fd-empty i{font-size:40px;display:block;margin-bottom:12px;color:var(--fiori-border)}
+
+    @media(max-width:900px){
+      #sidebar{width:180px}
+      .fd-kpi-row{flex-direction:column}
+    }
+
+    /* ── AI Chat panel ──────────────────────────────────────────── */
+    #chat-toggle{
+      position:fixed;bottom:24px;right:24px;z-index:100;
+      width:52px;height:52px;border-radius:50%;
+      background:var(--fiori-accent);color:#fff;border:none;
+      font-size:22px;cursor:pointer;box-shadow:0 4px 16px rgba(0,112,242,.4);
+      display:flex;align-items:center;justify-content:center;
+      transition:background .12s;
+    }
+    #chat-toggle:hover{background:var(--fiori-accent-dk)}
+    #chat-panel{
+      position:fixed;bottom:88px;right:24px;z-index:100;
+      width:380px;max-height:520px;
+      background:var(--fiori-surface);border:1px solid var(--fiori-border);
+      border-radius:var(--fiori-radius);box-shadow:0 8px 32px rgba(0,0,0,.18);
+      display:none;flex-direction:column;overflow:hidden;
+    }
+    #chat-panel.open{display:flex}
+    #chat-header{
+      background:var(--fiori-header);color:#fff;
+      padding:10px 14px;display:flex;align-items:center;gap:8px;
+      font-size:13px;font-weight:600;flex-shrink:0;
+    }
+    #chat-header .chat-persona{flex:1}
+    #chat-header .chat-close{
+      background:none;border:none;color:rgba(255,255,255,.8);
+      cursor:pointer;font-size:18px;line-height:1;
+    }
+    #chat-messages{
+      flex:1;overflow-y:auto;padding:12px;
+      display:flex;flex-direction:column;gap:8px;
+      min-height:200px;
+    }
+    .chat-msg{
+      max-width:90%;padding:8px 12px;border-radius:var(--fiori-radius);
+      font-size:13px;line-height:1.5;
+    }
+    .chat-msg--user{
+      align-self:flex-end;background:var(--fiori-accent);color:#fff;
+    }
+    .chat-msg--agent{
+      align-self:flex-start;background:#f2f2f2;color:var(--fiori-text);
+    }
+    .chat-msg--step{
+      align-self:flex-start;background:#fff4ec;color:var(--fiori-caution);
+      font-size:11px;font-style:italic;padding:4px 10px;
+    }
+    .chat-msg--error{
+      align-self:flex-start;background:#fdecea;color:var(--fiori-negative);
+      font-size:12px;
+    }
+    #chat-input-row{
+      display:flex;gap:6px;padding:10px;
+      border-top:1px solid var(--fiori-border);flex-shrink:0;
+    }
+    #chat-input{flex:1;padding:8px 10px;border:1px solid var(--fiori-border);
+      border-radius:var(--fiori-radius-sm);font-size:13px;font-family:inherit;}
+    #chat-input:focus{outline:none;border-color:var(--fiori-accent)}
+    #chat-send{flex-shrink:0}
+  </style>
+</head>
+<body>
+
+  <!-- Shell header -->
+  <header id="shell-header">
+    <div class="shell-logo">
+      <i class="bi bi-people"></i>
+      User Registry
+    </div>
+    <div class="shell-right">
+      <span id="api-status"></span>
+    </div>
+  </header>
+
+  <div id="body">
+    <!-- Sidebar -->
+    <aside id="sidebar">
+      <div class="side-group-label">Navigation</div>
+      <nav>
+      <a data-sec="SCRUM-121"><i class="bi bi-plus-circle"></i> Create, view, update, delete, and filter job applications via a REST API so I can track their lifecycle</a>
+      <a data-sec="SCRUM-125"><i class="bi bi-plus-circle"></i> User, I want a single-page dashboard that lists applications grouped by status and lets me add, edit, delete, and change status per row</a>
+      </nav>
+      <div class="side-footer">SCRUM-120 &bull; SDD Pipeline</div>
+    </aside>
+
+    <!-- Main -->
+    <div id="main">
+      <div id="page-header">
+        <span id="page-title">Create, view, update, delete, and filter job applications via a REST API so I can track their lifecycle</span>
+      </div>
+      <div id="content">
+      <div class="section" id="section-SCRUM-121">
+<div class="fd-panel">
+  <div class="fd-panel__header">
+    <i class="bi bi-briefcase"></i>
+    <div class="fd-panel__title">Job Applications</div>
+    <div class="fd-panel__toolbar">
+      <select id="scrum121-filter" class="fd-input" aria-label="Filter by status">
+        <option value="">All statuses</option>
+        <option value="applied">Applied</option>
+        <option value="interviewing">Interviewing</option>
+        <option value="offer">Offer</option>
+        <option value="rejected">Rejected</option>
+      </select>
+      <button id="scrum121-new-btn" class="fd-btn fd-btn--primary">
+        <i class="bi bi-plus"></i>
+        New Application
+      </button>
+    </div>
+  </div>
+
+  <div id="scrum121-kpis" class="fd-kpi-row"></div>
+
+  <div id="scrum121-msg"></div>
+
+  <div id="scrum121-table-container">
+    <div class="fd-empty">
+      <i class="bi bi-arrow-repeat"></i>
+      Loading...
+    </div>
+  </div>
+</div>
+
+<!-- Create Dialog -->
+<div id="scrum121-create-overlay" class="fd-dialog-overlay" aria-hidden="true">
+  <div class="fd-dialog" role="dialog" aria-modal="true" aria-labelledby="scrum121-create-title">
+    <div class="fd-dialog__header">
+      <div id="scrum121-create-title" class="fd-dialog__title">New Application</div>
+      <button class="fd-dialog__close" aria-label="Close" onclick="scrum121_closeCreateDialog()">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>
+    <div id="scrum121-create-msg"></div>
+    <form id="scrum121-create-form">
+      <div class="fd-form-group">
+        <label for="scrum121-create-company">Company</label>
+        <input id="scrum121-create-company" class="fd-input" type="text" placeholder="e.g., SAP" required />
+      </div>
+      <div class="fd-form-group">
+        <label for="scrum121-create-role">Role</label>
+        <input id="scrum121-create-role" class="fd-input" type="text" placeholder="e.g., Software Engineer" required />
+      </div>
+      <div class="fd-form-group">
+        <label for="scrum121-create-status">Status</label>
+        <select id="scrum121-create-status" class="fd-input">
+          <option value="applied" selected>Applied</option>
+          <option value="interviewing">Interviewing</option>
+          <option value="offer">Offer</option>
+          <option value="rejected">Rejected</option>
+        </select>
+      </div>
+      <div class="fd-form-group">
+        <label for="scrum121-create-date">Applied Date</label>
+        <input id="scrum121-create-date" class="fd-input" type="date" />
+      </div>
+      <div class="fd-form-group">
+        <label for="scrum121-create-notes">Notes</label>
+        <textarea id="scrum121-create-notes" class="fd-input" rows="3" placeholder="Optional notes"></textarea>
+      </div>
+      <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+        <button type="button" class="fd-btn" onclick="scrum121_closeCreateDialog()">Cancel</button>
+        <button type="submit" class="fd-btn fd-btn--primary">Create</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Edit Dialog -->
+<div id="scrum121-edit-overlay" class="fd-dialog-overlay" aria-hidden="true">
+  <div class="fd-dialog" role="dialog" aria-modal="true" aria-labelledby="scrum121-edit-title">
+    <div class="fd-dialog__header">
+      <div id="scrum121-edit-title" class="fd-dialog__title">Edit Application</div>
+      <button class="fd-dialog__close" aria-label="Close" onclick="scrum121_closeEditDialog()">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>
+    <div id="scrum121-edit-msg"></div>
+    <form id="scrum121-edit-form">
+      <input type="hidden" id="scrum121-edit-id" />
+      <div class="fd-form-group">
+        <label for="scrum121-edit-company">Company</label>
+        <input id="scrum121-edit-company" class="fd-input" type="text" required />
+      </div>
+      <div class="fd-form-group">
+        <label for="scrum121-edit-role">Role</label>
+        <input id="scrum121-edit-role" class="fd-input" type="text" required />
+      </div>
+      <div class="fd-form-group">
+        <label for="scrum121-edit-status">Status</label>
+        <select id="scrum121-edit-status" class="fd-input">
+          <option value="applied">Applied</option>
+          <option value="interviewing">Interviewing</option>
+          <option value="offer">Offer</option>
+          <option value="rejected">Rejected</option>
+        </select>
+      </div>
+      <div class="fd-form-group">
+        <label for="scrum121-edit-date">Applied Date</label>
+        <input id="scrum121-edit-date" class="fd-input" type="date" />
+      </div>
+      <div class="fd-form-group">
+        <label for="scrum121-edit-notes">Notes</label>
+        <textarea id="scrum121-edit-notes" class="fd-input" rows="3"></textarea>
+      </div>
+      <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+        <button type="button" class="fd-btn" onclick="scrum121_closeEditDialog()">Cancel</button>
+        <button type="submit" class="fd-btn fd-btn--primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Delete Confirm Dialog -->
+<div id="scrum121-delete-overlay" class="fd-dialog-overlay" aria-hidden="true">
+  <div class="fd-dialog" role="dialog" aria-modal="true" aria-labelledby="scrum121-delete-title">
+    <div class="fd-dialog__header">
+      <div id="scrum121-delete-title" class="fd-dialog__title">Delete Application</div>
+      <button class="fd-dialog__close" aria-label="Close" onclick="scrum121_closeDeleteDialog()">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>
+    <div id="scrum121-delete-msg" class="fd-msg fd-msg--info" style="display:none;"></div>
+    <div id="scrum121-delete-text" style="margin-bottom:16px; color: var(--fiori-text); font-size:13px;"></div>
+    <div style="display:flex; gap:8px; justify-content:flex-end;">
+      <button type="button" class="fd-btn" onclick="scrum121_closeDeleteDialog()">Cancel</button>
+      <button type="button" id="scrum121-delete-confirm" class="fd-btn fd-btn--negative">
+        <i class="bi bi-trash"></i>
+        Delete
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // State and constants
+  const scrum121State = {
+    filter: '',
+    list: [],
+    kpis: { total: 0, applied: 0, interviewing: 0, offer: 0, rejected: 0 },
+    loading: false,
+    error: ''
+  };
+  const scrum121Statuses = ['applied','interviewing','offer','rejected'];
+
+  // Utilities
+  function scrum121_h(text) {
+    if (text === null || text === undefined) return '';
+    return String(text).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+  }
+  function scrum121_statusBadge(status) {
+    const s = (status || '').toLowerCase();
+    let cls = 'fd-status--info', label = 'Applied';
+    if (s === 'interviewing') { cls = 'fd-status--caution'; label = 'Interviewing'; }
+    else if (s === 'offer') { cls = 'fd-status--positive'; label = 'Offer'; }
+    else if (s === 'rejected') { cls = 'fd-status--negative'; label = 'Rejected'; }
+    else { cls = 'fd-status--info'; label = 'Applied'; }
+    return `<span class="fd-status ${cls}">${label}</span>`;
+  }
+  function scrum121_setMsg(msg, type='error') {
+    const el = document.getElementById('scrum121-msg');
+    if (!msg) { el.innerHTML = ''; return; }
+    const cls = type === 'success' ? 'fd-msg fd-msg--success' : (type === 'info' ? 'fd-msg fd-msg--info' : 'fd-msg fd-msg--error');
+    el.innerHTML = `<div class="${cls}">${scrum121_h(msg)}</div>`;
+  }
+
+  // Renderers
+  function scrum121_renderKPIs() {
+    const k = scrum121State.kpis;
+    const el = document.getElementById('scrum121-kpis');
+    el.innerHTML = `
+      <div class="fd-kpi">
+        <div class="fd-kpi__label">Total</div>
+        <div class="fd-kpi__value">${k.total}</div>
+        <div class="fd-kpi__sub">All applications</div>
+      </div>
+      <div class="fd-kpi">
+        <div class="fd-kpi__label">Applied</div>
+        <div class="fd-kpi__value">${k.applied}</div>
+        <div class="fd-kpi__sub">Awaiting response</div>
+      </div>
+      <div class="fd-kpi">
+        <div class="fd-kpi__label">Interviewing</div>
+        <div class="fd-kpi__value">${k.interviewing}</div>
+        <div class="fd-kpi__sub">In progress</div>
+      </div>
+      <div class="fd-kpi">
+        <div class="fd-kpi__label">Offers</div>
+        <div class="fd-kpi__value">${k.offer}</div>
+        <div class="fd-kpi__sub">Received</div>
+      </div>
+      <div class="fd-kpi">
+        <div class="fd-kpi__label">Rejected</div>
+        <div class="fd-kpi__value">${k.rejected}</div>
+        <div class="fd-kpi__sub">Closed</div>
+      </div>
+    `;
+  }
+  function scrum121_renderTable() {
+    const container = document.getElementById('scrum121-table-container');
+    if (scrum121State.loading) {
+      container.innerHTML = `
+        <div class="fd-empty">
+          <i class="bi bi-arrow-repeat"></i>
+          Loading...
+        </div>
+      `;
+      return;
+    }
+    const items = scrum121State.list || [];
+    if (!items.length) {
+      container.innerHTML = `
+        <div class="fd-empty">
+          <i class="bi bi-inbox"></i>
+          No applications found
+        </div>
+      `;
+      return;
+    }
+    const rows = items.map(app => {
+      const notes = app.notes ? scrum121_h(app.notes) : '';
+      const notesShort = notes.length > 120 ? scrum121_h(notes.slice(0, 120)) + '…' : notes;
+      return `
+        <tr data-id="${app.id}">
+          <td>${scrum121_h(app.company)}</td>
+          <td>${scrum121_h(app.role)}</td>
+          <td>${scrum121_statusBadge(app.status)}</td>
+          <td>${scrum121_h(app.applied_date)}</td>
+          <td title="${notes}">${notesShort}</td>
+          <td>
+            <div style="display:flex; gap:8px;">
+              <button class="fd-btn fd-btn--secondary fd-btn--sm" onclick="scrum121_openEditDialog(${app.id})">
+                <i class="bi bi-pencil"></i>
+                Edit
+              </button>
+              <button class="fd-btn fd-btn--negative fd-btn--sm" onclick="scrum121_openDeleteDialog(${app.id})">
+                <i class="bi bi-trash"></i>
+                Delete
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+    container.innerHTML = `
+      <table class="fd-table">
+        <thead>
+          <tr>
+            <th>Company</th>
+            <th>Role</th>
+            <th>Status</th>
+            <th>Applied Date</th>
+            <th>Notes</th>
+            <th style="width:160px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows}
+        </tbody>
+      </table>
+    `;
+  }
+
+  // Data loading
+  async function scrum121_loadKPIs() {
+    try {
+      const res = await fetch(`${window.API_BASE}/applications`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Failed to load KPIs (${res.status})`);
+      }
+      const apps = await res.json();
+      const k = { total: apps.length, applied: 0, interviewing: 0, offer: 0, rejected: 0 };
+      for (const a of apps) {
+        const s = (a.status || '').toLowerCase();
+        if (k.hasOwnProperty(s)) k[s] += 1;
+      }
+      scrum121State.kpis = k;
+      scrum121_renderKPIs();
+    } catch (e) {
+      scrum121_setMsg(e.message || 'Failed to load KPIs', 'error');
+    }
+  }
+  async function scrum121_loadList() {
+    scrum121State.loading = true;
+    scrum121_renderTable();
+    scrum121_setMsg('');
+    try {
+      const params = new URLSearchParams();
+      const status = scrum121State.filter;
+      if (status) params.set('status', status);
+      const url = `${window.API_BASE}/applications${params.toString() ? '?' + params.toString() : ''}`;
+      const res = await fetch(url);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Failed to load applications (${res.status})`);
+      }
+      const apps = await res.json();
+      scrum121State.list = apps;
+    } catch (e) {
+      scrum121_setMsg(e.message || 'Failed to load applications', 'error');
+      scrum121State.list = [];
+    } finally {
+      scrum121State.loading = false;
+      scrum121_renderTable();
+    }
+  }
+  async function scrum121_reloadAll() {
+    await Promise.all([scrum121_loadKPIs(), scrum121_loadList()]);
+  }
+
+  // Dialog controls
+  function scrum121_openCreateDialog() {
+    document.getElementById('scrum121-create-form').reset();
+    document.getElementById('scrum121-create-status').value = 'applied';
+    document.getElementById('scrum121-create-msg').innerHTML = '';
+    document.getElementById('scrum121-create-overlay').classList.add('open');
+    document.getElementById('scrum121-create-overlay').setAttribute('aria-hidden', 'false');
+  }
+  function scrum121_closeCreateDialog() {
+    document.getElementById('scrum121-create-overlay').classList.remove('open');
+    document.getElementById('scrum121-create-overlay').setAttribute('aria-hidden', 'true');
+  }
+
+  function scrum121_openEditDialog(id) {
+    const app = scrum121State.list.find(a => a.id === id);
+    if (!app) return;
+    document.getElementById('scrum121-edit-id').value = app.id;
+    document.getElementById('scrum121-edit-company').value = app.company || '';
+    document.getElementById('scrum121-edit-role').value = app.role || '';
+    document.getElementById('scrum121-edit-status').value = (app.status || 'applied').toLowerCase();
+    document.getElementById('scrum121-edit-date').value = app.applied_date || '';
+    document.getElementById('scrum121-edit-notes').value = app.notes || '';
+    document.getElementById('scrum121-edit-msg').innerHTML = '';
+    document.getElementById('scrum121-edit-overlay').classList.add('open');
+    document.getElementById('scrum121-edit-overlay').setAttribute('aria-hidden', 'false');
+  }
+  function scrum121_closeEditDialog() {
+    document.getElementById('scrum121-edit-overlay').classList.remove('open');
+    document.getElementById('scrum121-edit-overlay').setAttribute('aria-hidden', 'true');
+  }
+
+  let scrum121_deleteTargetId = null;
+  function scrum121_openDeleteDialog(id) {
+    scrum121_deleteTargetId = id;
+    const app = scrum121State.list.find(a => a.id === id);
+    const label = app ? `${scrum121_h(app.company)} — ${scrum121_h(app.role)}` : `ID ${id}`;
+    document.getElementById('scrum121-delete-text').innerHTML = `Are you sure you want to delete: <strong>${label}</strong>? This action cannot be undone.`;
+    document.getElementById('scrum121-delete-overlay').classList.add('open');
+    document.getElementById('scrum121-delete-overlay').setAttribute('aria-hidden', 'false');
+  }
+  function scrum121_closeDeleteDialog() {
+    document.getElementById('scrum121-delete-overlay').classList.remove('open');
+    document.getElementById('scrum121-delete-overlay').setAttribute('aria-hidden', 'true');
+    scrum121_deleteTargetId = null;
+  }
+
+  // Form handlers
+  async function scrum121_handleCreateSubmit(e) {
+    e.preventDefault();
+    const msgEl = document.getElementById('scrum121-create-msg');
+    msgEl.innerHTML = '';
+    const company = document.getElementById('scrum121-create-company').value.trim();
+    const role = document.getElementById('scrum121-create-role').value.trim();
+    const status = document.getElementById('scrum121-create-status').value;
+    const applied_date_raw = document.getElementById('scrum121-create-date').value;
+    const notes_raw = document.getElementById('scrum121-create-notes').value;
+
+    if (!company) {
+      msgEl.innerHTML = `<div class="fd-msg fd-msg--error">Company is required</div>`;
+      return;
+    }
+    if (!role) {
+      msgEl.innerHTML = `<div class="fd-msg fd-msg--error">Role is required</div>`;
+      return;
+    }
+    const payload = { company, role, status };
+    if (applied_date_raw) payload.applied_date = applied_date_raw;
+    if (notes_raw && notes_raw.trim()) payload.notes = notes_raw.trim();
+
+    try {
+      const res = await fetch(`${window.API_BASE}/applications`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Create failed (${res.status})`);
+      }
+      scrum121_closeCreateDialog();
+      await scrum121_reloadAll();
+      scrum121_setMsg('Application created successfully', 'success');
+    } catch (e) {
+      msgEl.innerHTML = `<div class="fd-msg fd-msg--error">${scrum121_h(e.message || 'Failed to create')}</div>`;
+    }
+  }
+
+  async function scrum121_handleEditSubmit(e) {
+    e.preventDefault();
+    const msgEl = document.getElementById('scrum121-edit-msg');
+    msgEl.innerHTML = '';
+    const id = parseInt(document.getElementById('scrum121-edit-id').value, 10);
+    const company = document.getElementById('scrum121-edit-company').value.trim();
+    const role = document.getElementById('scrum121-edit-role').value.trim();
+    const status = document.getElementById('scrum121-edit-status').value;
+    const applied_date_raw = document.getElementById('scrum121-edit-date').value;
+    const notes_raw = document.getElementById('scrum121-edit-notes').value;
+
+    if (!company) {
+      msgEl.innerHTML = `<div class="fd-msg fd-msg--error">Company cannot be empty</div>`;
+      return;
+    }
+    if (!role) {
+      msgEl.innerHTML = `<div class="fd-msg fd-msg--error">Role cannot be empty</div>`;
+      return;
+    }
+
+    const payload = { company, role, status };
+    if (applied_date_raw) payload.applied_date = applied_date_raw;
+    if (notes_raw !== undefined) payload.notes = notes_raw.trim() === '' ? null : notes_raw.trim();
+
+    try {
+      const res = await fetch(`${window.API_BASE}/applications/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Update failed (${res.status})`);
+      }
+      scrum121_closeEditDialog();
+      await scrum121_reloadAll();
+      scrum121_setMsg('Application updated successfully', 'success');
+    } catch (e) {
+      msgEl.innerHTML = `<div class="fd-msg fd-msg--error">${scrum121_h(e.message || 'Failed to update')}</div>`;
+    }
+  }
+
+  async function scrum121_handleDeleteConfirm() {
+    const id = scrum121_deleteTargetId;
+    if (!id && id !== 0) return;
+    try {
+      const res = await fetch(`${window.API_BASE}/applications/${id}`, { method: 'DELETE' });
+      if (!res.ok && res.status !== 204) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Delete failed (${res.status})`);
+      }
+      scrum121_closeDeleteDialog();
+      await scrum121_reloadAll();
+      scrum121_setMsg('Application deleted', 'success');
+    } catch (e) {
+      const msgEl = document.getElementById('scrum121-delete-msg');
+      msgEl.style.display = 'block';
+      msgEl.className = 'fd-msg fd-msg--error';
+      msgEl.textContent = e.message || 'Failed to delete';
+    }
+  }
+
+  // Init
+  function scrum121_init() {
+    document.getElementById('scrum121-new-btn').addEventListener('click', scrum121_openCreateDialog);
+    document.getElementById('scrum121-filter').addEventListener('change', (e) => {
+      const val = e.target.value;
+      scrum121State.filter = val;
+      scrum121_loadList();
+    });
+    document.getElementById('scrum121-create-form').addEventListener('submit', scrum121_handleCreateSubmit);
+    document.getElementById('scrum121-edit-form').addEventListener('submit', scrum121_handleEditSubmit);
+    document.getElementById('scrum121-delete-confirm').addEventListener('click', scrum121_handleDeleteConfirm);
+    scrum121_reloadAll();
+  }
+
+  // Auto-init when inserted
+  (function(){
+    // If the section is already in DOM, init immediately; else wait for DOMContentLoaded
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', scrum121_init, { once: true });
+    } else {
+      scrum121_init();
+    }
+  })();
+</script>
+      </div>
+      <div class="section" id="section-SCRUM-125">
+<div class="fd-panel">
+  <div class="fd-panel__header">
+    <div class="fd-panel__title">Job Applications Overview</div>
+    <div class="fd-panel__toolbar">
+      <button class="fd-btn fd-btn--secondary fd-btn--sm" id="scrum125-refresh-btn"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+    </div>
+  </div>
+  <div id="scrum125-global-msg" class="fd-msg fd-msg--error" style="display:none;"></div>
+  <div id="scrum125-kpis" class="fd-kpi-row">
+    <div class="fd-kpi" aria-live="polite">
+      <div class="fd-kpi__label">Total</div>
+      <div class="fd-kpi__value">0</div>
+      <div class="fd-kpi__sub">All applications</div>
+    </div>
+    <div class="fd-kpi" aria-live="polite">
+      <div class="fd-kpi__label">Applied</div>
+      <div class="fd-kpi__value">0</div>
+      <div class="fd-kpi__sub">Awaiting response</div>
+    </div>
+    <div class="fd-kpi" aria-live="polite">
+      <div class="fd-kpi__label">Interviewing</div>
+      <div class="fd-kpi__value">0</div>
+      <div class="fd-kpi__sub">In progress</div>
+    </div>
+    <div class="fd-kpi" aria-live="polite">
+      <div class="fd-kpi__label">Offer</div>
+      <div class="fd-kpi__value">0</div>
+      <div class="fd-kpi__sub">Offers received</div>
+    </div>
+    <div class="fd-kpi" aria-live="polite">
+      <div class="fd-kpi__label">Rejected</div>
+      <div class="fd-kpi__value">0</div>
+      <div class="fd-kpi__sub">Closed</div>
+    </div>
+  </div>
+</div>
+
+<div class="fd-panel">
+  <div class="fd-panel__header">
+    <div class="fd-panel__title">Add New Application</div>
+  </div>
+  <div id="scrum125-add-msg" class="fd-msg fd-msg--error" style="display:none;"></div>
+  <form id="scrum125-add-form" novalidate>
+    <div class="fd-form-group">
+      <label for="scrum125-add-company">Company</label>
+      <input id="scrum125-add-company" name="company" class="fd-input" type="text" required aria-required="true" placeholder="e.g., SAP SE">
+    </div>
+    <div class="fd-form-group">
+      <label for="scrum125-add-role">Role</label>
+      <input id="scrum125-add-role" name="role" class="fd-input" type="text" required aria-required="true" placeholder="e.g., Software Engineer">
+    </div>
+    <div class="fd-form-group">
+      <label for="scrum125-add-status">Status</label>
+      <select id="scrum125-add-status" name="status" class="fd-input"></select>
+    </div>
+    <div class="fd-form-group">
+      <label for="scrum125-add-date">Applied Date</label>
+      <input id="scrum125-add-date" name="applied_date" class="fd-input" type="date" pattern="\\d{4}-\\d{2}-\\d{2}">
+    </div>
+    <div class="fd-form-group">
+      <label for="scrum125-add-notes">Notes</label>
+      <textarea id="scrum125-add-notes" name="notes" class="fd-input" rows="2" placeholder="Optional notes..."></textarea>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <button type="submit" class="fd-btn fd-btn--primary"><i class="bi bi-plus-lg"></i> Add Application</button>
+      <button type="button" class="fd-btn fd-btn--secondary fd-btn--sm" id="scrum125-add-reset"><i class="bi bi-eraser"></i> Reset</button>
+    </div>
+  </form>
+</div>
+
+<div id="scrum125-loading-panel" class="fd-panel">
+  <div class="fd-panel__header">
+    <div class="fd-panel__title">Applications by Status</div>
+  </div>
+  <div class="fd-empty" id="scrum125-initial-loading" aria-live="polite">
+    <i class="bi bi-arrow-repeat"></i>
+    Loading applications...
+  </div>
+</div>
+
+<div id="scrum125-groups-anchor"></div>
+
+<!-- Delete confirmation dialog -->
+<div class="fd-dialog-overlay" id="scrum125-del-overlay" aria-hidden="true">
+  <div class="fd-dialog" role="dialog" aria-modal="true" aria-labelledby="scrum125-del-title">
+    <div class="fd-dialog__header">
+      <div class="fd-dialog__title" id="scrum125-del-title">Delete Application</div>
+      <button class="fd-dialog__close" type="button" aria-label="Close" onclick="scrum125_closeDeleteDialog()">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>
+    <div id="scrum125-del-error" class="fd-msg fd-msg--error" style="display:none;"></div>
+    <p id="scrum125-del-text">Are you sure you want to delete this application?</p>
+    <div style="display:flex; gap:8px; margin-top:16px;">
+      <button type="button" class="fd-btn fd-btn--negative" id="scrum125-del-confirm"><i class="bi bi-trash"></i> Delete</button>
+      <button type="button" class="fd-btn" onclick="scrum125_closeDeleteDialog()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  // ----- State -----
+  const scrum125State = {
+    statuses: [],
+    grouped: {},
+    editingId: null,
+    deleteId: null
+  };
+
+  // ----- Elements -----
+  const scrum125Els = {
+    kpis: document.getElementById('scrum125-kpis'),
+    globalMsg: document.getElementById('scrum125-global-msg'),
+    loadingPanel: document.getElementById('scrum125-loading-panel'),
+    groupsAnchor: document.getElementById('scrum125-groups-anchor'),
+    // Add form
+    addForm: document.getElementById('scrum125-add-form'),
+    addMsg: document.getElementById('scrum125-add-msg'),
+    addCompany: document.getElementById('scrum125-add-company'),
+    addRole: document.getElementById('scrum125-add-role'),
+    addStatus: document.getElementById('scrum125-add-status'),
+    addDate: document.getElementById('scrum125-add-date'),
+    addNotes: document.getElementById('scrum125-add-notes'),
+    addReset: document.getElementById('scrum125-add-reset'),
+    refreshBtn: document.getElementById('scrum125-refresh-btn'),
+    // Delete dialog
+    delOverlay: document.getElementById('scrum125-del-overlay'),
+    delError: document.getElementById('scrum125-del-error'),
+    delText: document.getElementById('scrum125-del-text'),
+    delConfirm: document.getElementById('scrum125-del-confirm')
+  };
+
+  // ----- Utilities -----
+  function scrum125_apiBase() {
+    const b = (window.API_BASE || '');
+    return b.endsWith('/') ? b.slice(0, -1) : b;
+  }
+  async function scrum125_api(path, options = {}) {
+    const url = scrum125_apiBase() + (path.startsWith('/') ? path : '/' + path);
+    const resp = await fetch(url, Object.assign({
+      headers: { 'Content-Type': 'application/json' }
+    }, options));
+    const ct = resp.headers.get('content-type') || '';
+    let payload = null;
+    try {
+      payload = ct.includes('application/json') ? await resp.json() : await resp.text();
+    } catch (e) {
+      payload = null;
+    }
+    if (!resp.ok) {
+      const msg = payload && payload.error ? payload.error : (typeof payload === 'string' && payload ? payload : 'Request failed');
+      throw new Error(msg);
+    }
+    return payload;
+  }
+  function scrum125_today() {
+    const d = new Date();
+    const m = String(d.getMonth()+1).padStart(2,'0');
+    const day = String(d.getDate()).padStart(2,'0');
+    return d.getFullYear() + '-' + m + '-' + day;
+  }
+  function scrum125_cap(s) {
+    return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+  }
+  function scrum125_statusBadgeClass(status) {
+    switch (status) {
+      case 'applied': return 'fd-status fd-status--info';
+      case 'interviewing': return 'fd-status fd-status--info';
+      case 'offer': return 'fd-status fd-status--positive';
+      case 'rejected': return 'fd-status fd-status--negative';
+      default: return 'fd-status fd-status--info';
+    }
+  }
+  function scrum125_clearMsg(el) {
+    el.textContent = '';
+    el.style.display = 'none';
+  }
+  function scrum125_showMsg(el, text) {
+    el.textContent = text;
+    el.style.display = 'block';
+  }
+  function scrum125_escape(s) {
+    return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+  }
+
+  // ----- Rendering -----
+  function scrum125_renderKPIs() {
+    const g = scrum125State.grouped || {};
+    const applied = (g.applied || []).length;
+    const interviewing = (g.interviewing || []).length;
+    const offer = (g.offer || []).length;
+    const rejected = (g.rejected || []).length;
+    const total = applied + interviewing + offer + rejected;
+    const tiles = scrum125Els.kpis.querySelectorAll('.fd-kpi');
+    if (tiles.length >= 5) {
+      tiles[0].querySelector('.fd-kpi__value').textContent = total;
+      tiles[1].querySelector('.fd-kpi__value').textContent = applied;
+      tiles[2].querySelector('.fd-kpi__value').textContent = interviewing;
+      tiles[3].querySelector('.fd-kpi__value').textContent = offer;
+      tiles[4].querySelector('.fd-kpi__value').textContent = rejected;
+    }
+  }
+
+  function scrum125_buildGroupPanel(status) {
+    const panelId = `scrum125-panel-${status}`;
+    const bodyId = `scrum125-panel-body-${status}`;
+    return `
+      <div class="fd-panel" id="${panelId}">
+        <div class="fd-panel__header">
+          <div class="fd-panel__title">${scrum125_cap(status)}</div>
+        </div>
+        <div id="${bodyId}">
+          <div class="fd-empty"><i class="bi bi-inboxes"></i> No applications in this status.</div>
+        </div>
+      </div>
+    `;
+  }
+
+  function scrum125_renderGroupsSkeleton() {
+    // Build panels for each status in order
+    scrum125Els.groupsAnchor.innerHTML = scrum125State.statuses.map(s => scrum125_buildGroupPanel(s)).join('');
+  }
+
+  function scrum125_renderGroupTable(status) {
+    const apps = scrum125State.grouped[status] || [];
+    const body = document.getElementById(`scrum125-panel-body-${status}`);
+    if (!body) return;
+    if (!apps.length) {
+      body.innerHTML = `<div class="fd-empty"><i class="bi bi-inboxes"></i> No applications in this status.</div>`;
+      return;
+    }
+    const rows = apps.map(app => scrum125_renderRow(app)).join('');
+    body.innerHTML = `
+      <div id="scrum125-panel-msg-${status}" class="fd-msg fd-msg--error" style="display:none;"></div>
+      <table class="fd-table" aria-label="${scrum125_cap(status)} applications">
+        <thead>
+          <tr>
+            <th scope="col">Company</th>
+            <th scope="col">Role</th>
+            <th scope="col">Status</th>
+            <th scope="col">Applied Date</th>
+            <th scope="col">Notes</th>
+            <th scope="col">Actions</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+  }
+
+  function scrum125_renderRow(app) {
+    const isEditing = scrum125State.editingId === app.id;
+    if (!isEditing) {
+      return `
+        <tr data-id="${app.id}">
+          <td>${scrum125_escape(app.company)}</td>
+          <td>${scrum125_escape(app.role)}</td>
+          <td><span class="${scrum125_statusBadgeClass(app.status)}">${scrum125_cap(app.status)}</span></td>
+          <td>${scrum125_escape(app.applied_date)}</td>
+          <td>${scrum125_escape(app.notes)}</td>
+          <td>
+            <select class="fd-input scrum125-status-select" data-id="${app.id}" aria-label="Change status">
+              ${scrum125State.statuses.map(s => `<option value="${s}" ${s===app.status?'selected':''}>${scrum125_cap(s)}</option>`).join('')}
+            </select>
+            <button type="button" class="fd-btn fd-btn--secondary fd-btn--sm scrum125-action" data-action="edit" data-id="${app.id}">
+              <i class="bi bi-pencil"></i> Edit
+            </button>
+            <button type="button" class="fd-btn fd-btn--negative fd-btn--sm scrum125-action" data-action="delete" data-id="${app.id}">
+              <i class="bi bi-trash"></i> Delete
+            </button>
+          </td>
+        </tr>
+      `;
+    } else {
+      return `
+        <tr data-id="${app.id}" data-editing="true">
+          <td><input class="fd-input" name="company" type="text" value="${scrum125_escape(app.company)}" aria-label="Company"></td>
+          <td><input class="fd-input" name="role" type="text" value="${scrum125_escape(app.role)}" aria-label="Role"></td>
+          <td>
+            <select class="fd-input" name="status" aria-label="Status">
+              ${scrum125State.statuses.map(s => `<option value="${s}" ${s===app.status?'selected':''}>${scrum125_cap(s)}</option>`).join('')}
+            </select>
+          </td>
+          <td><input class="fd-input" name="applied_date" type="date" value="${scrum125_escape(app.applied_date)}" pattern="\\d{4}-\\d{2}-\\d{2}" aria-label="Applied Date"></td>
+          <td><textarea class="fd-input" name="notes" rows="1" aria-label="Notes">${scrum125_escape(app.notes || '')}</textarea></td>
+          <td>
+            <button type="button" class="fd-btn fd-btn--primary fd-btn--sm scrum125-action" data-action="save" data-id="${app.id}">
+              <i class="bi bi-check-lg"></i> Save
+            </button>
+            <button type="button" class="fd-btn fd-btn--secondary fd-btn--sm scrum125-action" data-action="cancel" data-id="${app.id}">
+              <i class="bi bi-x-lg"></i> Cancel
+            </button>
+          </td>
+        </tr>
+        <tr data-id="${app.id}-err" data-editing-error="true">
+          <td colspan="6">
+            <div class="fd-msg fd-msg--error" style="display:none;" id="scrum125-row-msg-${app.id}"></div>
+          </td>
+        </tr>
+      `;
+    }
+  }
+
+  function scrum125_renderAllGroups() {
+    if (!scrum125State.statuses.length) return;
+    scrum125_renderGroupsSkeleton();
+    scrum125State.statuses.forEach(status => scrum125_renderGroupTable(status));
+  }
+
+  // ----- Actions -----
+  async function scrum125_refresh() {
+    scrum125_clearMsg(scrum125Els.globalMsg);
+    try {
+      // Show loading state for first render
+      document.getElementById('scrum125-initial-loading')?.parentElement?.classList?.add('loading');
+      // Fetch grouped data
+      const grouped = await scrum125_api('applications/grouped');
+      scrum125State.grouped = grouped || {};
+      scrum125_renderKPIs();
+      scrum125_renderAllGroups();
+      // Hide initial loading panel after first successful load
+      if (scrum125Els.loadingPanel) scrum125Els.loadingPanel.style.display = 'none';
+    } catch (e) {
+      scrum125_showMsg(scrum125Els.globalMsg, e.message || 'Failed to load applications');
+    }
+  }
+
+  async function scrum125_loadStatuses() {
+    const data = await scrum125_api('applications/statuses');
+    scrum125State.statuses = (data && data.statuses) ? data.statuses : [];
+    // Populate add form statuses
+    scrum125Els.addStatus.innerHTML = scrum125State.statuses.map(s => `<option value="${s}">${scrum125_cap(s)}</option>`).join('');
+    scrum125Els.addStatus.value = 'applied';
+    scrum125Els.addDate.value = scrum125_today();
+  }
+
+  function scrum125_getRowInputs(tr) {
+    return {
+      company: tr.querySelector('input[name="company"]')?.value?.trim() || '',
+      role: tr.querySelector('input[name="role"]')?.value?.trim() || '',
+      status: tr.querySelector('select[name="status"]')?.value || 'applied',
+      applied_date: tr.querySelector('input[name="applied_date"]')?.value?.trim() || scrum125_today(),
+      notes: tr.querySelector('textarea[name="notes"]')?.value || ''
+    };
+  }
+
+  function scrum125_validatePayload(p, forUpdate=false) {
+    if (!p.company) throw new Error('company is required');
+    if (!p.role) throw new Error('role is required');
+    if (!/\\d{4}-\\d{2}-\\d{2}$/.test(p.applied_date)) throw new Error('applied_date must be YYYY-MM-DD');
+    if (!scrum125State.statuses.includes(p.status)) throw new Error('status must be one of: ' + scrum125State.statuses.map(scrum125_cap).join(', '));
+    return p;
+  }
+
+  function scrum125_openDeleteDialog(app) {
+    scrum125State.deleteId = app.id;
+    scrum125_clearMsg(scrum125Els.delError);
+    scrum125Els.delText.textContent = `Delete application "${app.company} — ${app.role}"? This action cannot be undone.`;
+    scrum125Els.delOverlay.classList.add('open');
+    scrum125Els.delOverlay.setAttribute('aria-hidden', 'false');
+  }
+
+  window.scrum125_closeDeleteDialog = function() {
+    scrum125State.deleteId = null;
+    scrum125Els.delOverlay.classList.remove('open');
+    scrum125Els.delOverlay.setAttribute('aria-hidden', 'true');
+  };
+
+  // ----- Event Handlers -----
+  scrum125Els.refreshBtn.addEventListener('click', scrum125_refresh);
+
+  scrum125Els.addReset.addEventListener('click', function(){
+    scrum125_clearMsg(scrum125Els.addMsg);
+    scrum125Els.addCompany.value = '';
+    scrum125Els.addRole.value = '';
+    scrum125Els.addStatus.value = 'applied';
+    scrum125Els.addDate.value = scrum125_today();
+    scrum125Els.addNotes.value = '';
+  });
+
+  scrum125Els.addForm.addEventListener('submit', async function(ev){
+    ev.preventDefault();
+    scrum125_clearMsg(scrum125Els.addMsg);
+    const payload = {
+      company: scrum125Els.addCompany.value.trim(),
+      role: scrum125Els.addRole.value.trim(),
+      status: scrum125Els.addStatus.value || 'applied',
+      applied_date: scrum125Els.addDate.value.trim() || scrum125_today(),
+      notes: scrum125Els.addNotes.value || ''
+    };
+    try {
+      scrum125_validatePayload(payload);
+      await scrum125_api('applications', { method: 'POST', body: JSON.stringify(payload) });
+      // Reset form
+      scrum125Els.addCompany.value = '';
+      scrum125Els.addRole.value = '';
+      scrum125Els.addStatus.value = 'applied';
+      scrum125Els.addDate.value = scrum125_today();
+      scrum125Els.addNotes.value = '';
+      await scrum125_refresh();
+    } catch (e) {
+      scrum125_showMsg(scrum125Els.addMsg, e.message || 'Failed to add application');
+    }
+  });
+
+  // Delegate clicks/changes within groups
+  scrum125Els.groupsAnchor.addEventListener('change', async function(ev){
+    const target = ev.target;
+    if (target.classList.contains('scrum125-status-select')) {
+      const id = target.getAttribute('data-id');
+      const newStatus = target.value;
+      try {
+        await scrum125_api(`applications/${id}/status`, { method: 'PUT', body: JSON.stringify({ status: newStatus }) });
+        await scrum125_refresh();
+      } catch (e) {
+        scrum125_showMsg(scrum125Els.globalMsg, e.message || 'Failed to change status');
+        // revert select to actual status from state
+        const current = scrum125_findAppById(id);
+        if (current) target.value = current.status;
+      }
+    }
+  });
+
+  scrum125Els.groupsAnchor.addEventListener('click', async function(ev){
+    const btn = ev.target.closest('.scrum125-action');
+    if (!btn) return;
+    const action = btn.getAttribute('data-action');
+    const id = btn.getAttribute('data-id');
+    const app = scrum125_findAppById(id);
+    if (!app) return;
+
+    if (action === 'edit') {
+      scrum125State.editingId = id;
+      scrum125_renderAllGroups();
+      return;
+    }
+    if (action === 'cancel') {
+      scrum125State.editingId = null;
+      scrum125_renderAllGroups();
+      return;
+    }
+    if (action === 'save') {
+      const row = scrum125Els.groupsAnchor.querySelector(`tr[data-id="${id}"][data-editing="true"]`);
+      const msgEl = document.getElementById(`scrum125-row-msg-${id}`);
+      if (msgEl) scrum125_clearMsg(msgEl);
+      if (!row) return;
+      try {
+        const patch = scrum125_validatePayload(scrum125_getRowInputs(row), true);
+        await scrum125_api(`applications/${id}`, { method: 'PUT', body: JSON.stringify(patch) });
+        scrum125State.editingId = null;
+        await scrum125_refresh();
+      } catch (e) {
+        if (msgEl) {
+          scrum125_showMsg(msgEl, e.message || 'Failed to save changes');
+          msgEl.style.display = 'block';
+        } else {
+          scrum125_showMsg(scrum125Els.globalMsg, e.message || 'Failed to save changes');
+        }
+      }
+      return;
+    }
+    if (action === 'delete') {
+      scrum125_openDeleteDialog(app);
+      return;
+    }
+  });
+
+  // Delete confirm
+  scrum125Els.delConfirm.addEventListener('click', async function(){
+    scrum125_clearMsg(scrum125Els.delError);
+    const id = scrum125State.deleteId;
+    if (!id) return;
+    try {
+      await scrum125_api(`applications/${id}`, { method: 'DELETE' });
+      window.scrum125_closeDeleteDialog();
+      await scrum125_refresh();
+    } catch (e) {
+      scrum125_showMsg(scrum125Els.delError, e.message || 'Failed to delete application');
+    }
+  });
+
+  // ----- Helpers -----
+  function scrum125_findAppById(id) {
+    for (const s of scrum125State.statuses) {
+      const list = scrum125State.grouped[s] || [];
+      for (const a of list) if (a.id === id) return a;
+    }
+    return null;
+  }
+
+  // ----- Init -----
+  async function scrum125_init() {
+    try {
+      await scrum125_loadStatuses();
+      await scrum125_refresh();
+    } catch (e) {
+      scrum125_showMsg(scrum125Els.globalMsg, e.message || 'Initialization failed');
+    }
+  }
+
+  scrum125_init();
+})();
+</script>
+      </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI Chat button (hidden until /health confirms agent is loaded) -->
+  <button id="chat-toggle" title="Ask AI" style="display:none">
+    <i class="bi bi-robot"></i>
+  </button>
+
+  <!-- AI Chat panel -->
+  <div id="chat-panel">
+    <div id="chat-header">
+      <i class="bi bi-robot"></i>
+      <div class="chat-persona">
+        <div id="chat-persona-name">AI Assistant</div>
+        <div id="chat-persona-role" style="font-size:11px;opacity:.75;font-weight:400"></div>
+      </div>
+      <button class="chat-close" id="chat-close" aria-label="Close">&times;</button>
+    </div>
+    <div id="chat-messages">
+      <div class="chat-msg chat-msg--agent">
+        Hi! I can answer questions about your data. Try asking something like
+        "How many records are there?" or "Show me the latest entries."
+      </div>
+    </div>
+    <div id="chat-input-row">
+      <input id="chat-input" class="fd-input" type="text"
+             placeholder="Ask a question..." autocomplete="off">
+      <button id="chat-send" class="fd-btn fd-btn--primary fd-btn--sm">
+        <i class="bi bi-send"></i>
+      </button>
+    </div>
+  </div>
+
+  <script>
+    window.API_BASE = '';  // relative — works on any port the server is running on
+    const SECTIONS = [{"key": "SCRUM-121", "title": "Create, view, update, delete, and filter job applications via a REST API so I can track their lifecycle"}, {"key": "SCRUM-125", "title": "User, I want a single-page dashboard that lists applications grouped by status and lets me add, edit, delete, and change status per row"}];
+
+    // API health indicator
+    fetch(window.API_BASE + '/health').then(r => r.json()).then(data => {
+      const el = document.getElementById('api-status');
+      el.innerHTML = data.status === 'ok'
+        ? '<i class="bi bi-circle-fill" style="color:#7dd4a8"></i> API online'
+        : '<i class="bi bi-circle-fill" style="color:#e9730c"></i> API offline';
+      // show chat toggle only if agent blueprint is loaded
+      if (data.agent) {
+        document.getElementById('chat-toggle').style.display = 'flex';
+        // load persona name into chat header
+        fetch('/agent/persona').then(r => r.json()).then(p => {
+          document.getElementById('chat-persona-name').textContent = p.name;
+          document.getElementById('chat-persona-role').textContent = p.role;
+        }).catch(() => {});
+      }
+    }).catch(() => {
+      document.getElementById('api-status').innerHTML =
+        '<i class="bi bi-circle-fill" style="color:#e9730c"></i> API offline — run run_demo.py';
+    });
+
+    function navigate(key) {
+      document.querySelectorAll('#sidebar nav a').forEach(a =>
+        a.classList.toggle('active', a.dataset.sec === key));
+      document.querySelectorAll('.section').forEach(s =>
+        s.classList.toggle('active', s.id === 'section-' + key));
+      const meta = SECTIONS.find(s => s.key === key);
+      if (meta) document.getElementById('page-title').textContent = meta.title;
+    }
+    document.querySelectorAll('#sidebar nav a').forEach(a =>
+      a.addEventListener('click', () => navigate(a.dataset.sec)));
+    if (SECTIONS.length) navigate(SECTIONS[0].key);
+
+    // ── Chat panel ──────────────────────────────────────────────
+    const chatToggle   = document.getElementById('chat-toggle');
+    const chatPanel    = document.getElementById('chat-panel');
+    const chatClose    = document.getElementById('chat-close');
+    const chatMessages = document.getElementById('chat-messages');
+    const chatInput    = document.getElementById('chat-input');
+    const chatSend     = document.getElementById('chat-send');
+
+    chatToggle.addEventListener('click', () => chatPanel.classList.toggle('open'));
+    chatClose.addEventListener('click',  () => chatPanel.classList.remove('open'));
+
+    function chatAppend(cls, text) {
+      const d = document.createElement('div');
+      d.className = 'chat-msg ' + cls;
+      d.textContent = text;
+      chatMessages.appendChild(d);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+      return d;
+    }
+
+    async function chatSubmit() {
+      const q = chatInput.value.trim();
+      if (!q) return;
+      chatInput.value = '';
+      chatSend.disabled = true;
+      chatAppend('chat-msg--user', q);
+
+      let stepEl = null;
+      let answerEl = null;
+
+      try {
+        const res = await fetch('/agent/chat', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({question: q}),
+        });
+
+        if (!res.ok || !res.body) {
+          chatAppend('chat-msg--error', 'Agent error: ' + res.status);
+          chatSend.disabled = false;
+          return;
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+
+        while (true) {
+          const {done, value} = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, {stream: true});
+          const parts = buf.split('\n\n');
+          buf = parts.pop();
+          for (const part of parts) {
+            const eventLine = part.split('\n').find(l => l.startsWith('event:'));
+            const dataLine  = part.split('\n').find(l => l.startsWith('data:'));
+            if (!eventLine || !dataLine) continue;
+            const event = eventLine.replace('event:', '').trim();
+            let data;
+            try { data = JSON.parse(dataLine.replace('data:', '').trim()); } catch { continue; }
+
+            if (event === 'thinking') {
+              if (!stepEl) stepEl = chatAppend('chat-msg--step', '');
+              stepEl.textContent = `Thinking... (step ${data.step})`;
+              chatMessages.scrollTop = chatMessages.scrollHeight;
+            } else if (event === 'tool_call') {
+              if (stepEl) stepEl.textContent = `Calling ${data.tool}...`;
+            } else if (event === 'tool_result') {
+              if (stepEl) stepEl.textContent = `Got result from ${data.tool}`;
+            } else if (event === 'answer') {
+              if (stepEl) { stepEl.remove(); stepEl = null; }
+              chatAppend('chat-msg--agent', data.content);
+            } else if (event === 'error') {
+              if (stepEl) { stepEl.remove(); stepEl = null; }
+              chatAppend('chat-msg--error', data.message);
+            }
+          }
+        }
+      } catch(e) {
+        chatAppend('chat-msg--error', 'Connection error: ' + e.message);
+      }
+      chatSend.disabled = false;
+      chatInput.focus();
+    }
+
+    chatSend.addEventListener('click', chatSubmit);
+    chatInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); chatSubmit(); }
+    });
+  </script>
+</body>
+</html>
