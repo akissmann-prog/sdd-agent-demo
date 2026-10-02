@@ -21,7 +21,7 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Set
 
 
 ALLOWED_STATUSES: Tuple[str, ...] = ("applied", "interviewing", "offer", "rejected")
@@ -177,9 +177,6 @@ def update_application(app_id: int, data: Mapping[str, Any], db_path: str = DEFA
     if not valid_updates:
         raise ValidationError("No valid fields to update")
 
-    # Ensure the record exists before updating
-    _ensure_exists(app_id, db_path=db_path)
-
     assignments: List[str] = []
     params: List[Any] = []
     for field in ("company", "role", "status", "applied_date", "notes"):
@@ -194,7 +191,7 @@ def update_application(app_id: int, data: Mapping[str, Any], db_path: str = DEFA
 
     with _connect(db_path) as conn:
         try:
-            conn.execute(
+            cur = conn.execute(
                 f"""
                 UPDATE applications
                 SET {", ".join(assignments)}
@@ -202,6 +199,8 @@ def update_application(app_id: int, data: Mapping[str, Any], db_path: str = DEFA
                 """,
                 params,
             )
+            if cur.rowcount == 0:
+                raise NotFoundError(f"Application with id={app_id} not found")
         except sqlite3.IntegrityError as e:
             raise ValidationError("Integrity error while updating application") from e
 
@@ -214,7 +213,9 @@ def update_application(app_id: int, data: Mapping[str, Any], db_path: str = DEFA
             (app_id,),
         )
         row = cur.fetchone()
-    assert row is not None
+    if row is None:
+        # In case the record was deleted between UPDATE and SELECT
+        raise NotFoundError(f"Application with id={app_id} not found")
     return _row_to_dict(row)
 
 
@@ -241,12 +242,27 @@ def delete_application(app_id: int, db_path: str = DEFAULT_DB_PATH) -> None:
 
 # Internal helpers
 
+_INITIALIZED_DB_PATHS: Set[str] = set()
+
 
 def _connect(db_path: str) -> sqlite3.Connection:
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, timeout=5)
     conn.row_factory = sqlite3.Row
-    _ensure_schema(conn)
+    _ensure_schema_once(conn, db_path)
     return conn
+
+
+def _ensure_schema_once(conn: sqlite3.Connection, db_path: str) -> None:
+    if db_path in _INITIALIZED_DB_PATHS:
+        return
+    # Enable WAL for better concurrency; best-effort
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
+    except Exception:
+        pass
+    _ensure_schema(conn)
+    _INITIALIZED_DB_PATHS.add(db_path)
 
 
 def _ensure_schema(conn: sqlite3.Connection) -> None:
