@@ -1,266 +1,237 @@
+import json
+import uuid
 import sys
 import types
 import importlib
-import uuid
-
 import pytest
 from flask import Flask
 
-import scrum_147  # ensure logic module is importable from same directory
 
-
-def build_app(tmp_path):
-    # Provide a config module with DB_PATH pointing to a real sqlite file in tmp_path
-    db_path = tmp_path / "test.db"
+@pytest.fixture
+def app_client(tmp_path, monkeypatch):
+    # Prepare config module with DB_PATH for this test
+    db_path = str(tmp_path / "test.db")
     config_mod = types.ModuleType("config")
-    config_mod.DB_PATH = str(db_path)
+    config_mod.DB_PATH = db_path
     sys.modules["config"] = config_mod
 
-    # Ensure fresh import of routes so it picks up this DB_PATH
-    if "scrum_147_routes" in sys.modules:
-        del sys.modules["scrum_147_routes"]
+    # Ensure fresh imports for per-test DB_PATH
+    for name in ["scrum_147_routes", "scrum_147"]:
+        if name in sys.modules:
+            sys.modules.pop(name)
+
+    logic = importlib.import_module("scrum_147")
     routes = importlib.import_module("scrum_147_routes")
 
     app = Flask(__name__)
-    app.config["TESTING"] = True
     app.register_blueprint(routes.bp)
-    return app
-
-
-@pytest.fixture
-def app(tmp_path):
-    return build_app(tmp_path)
-
-
-def test_post_create_success_and_schema_smoke_and_status_normalization(app):
     client = app.test_client()
+    return client, routes, logic
 
-    # Initial list should be empty
-    resp = client.get("/applications")
-    assert resp.status_code == 200
-    data = resp.get_json()
-    assert "items" in data
-    assert isinstance(data["items"], list)
-    assert len(data["items"]) == 0
 
-    # Create minimal valid application (defaults applied)
-    payload = {"company": "Acme Corp", "role": "Software Engineer"}
+def test_post_create_and_schema_smoke(app_client):
+    client, _, _ = app_client
+
+    # Create an application (no status/applied_date to use defaults)
+    payload = {"company": "Acme Corp", "role": "Backend Engineer"}
     resp = client.post("/applications", json=payload)
     assert resp.status_code == 201
-    created1 = resp.get_json()
-    # Schema smoke test keys
-    for key in ("id", "company", "role", "status", "applied_date"):
-        assert key in created1
-    assert created1["company"] == "Acme Corp"
-    assert created1["role"] == "Software Engineer"
-    # Default status should be 'applied'
-    assert created1["status"] == "applied"
-
-    # After first POST, list and assert presence of expected keys
-    resp = client.get("/applications")
-    assert resp.status_code == 200
-    listed = resp.get_json()
-    assert "items" in listed
-    assert len(listed["items"]) >= 1
-    for item in listed["items"]:
-        for key in ("id", "company", "role", "status", "applied_date"):
-            assert key in item
-
-    # Create with mixed-case status "Applied" -> normalized to lowercase
-    payload2 = {"company": "Beta LLC", "role": "QA Engineer", "status": "Applied"}
-    resp = client.post("/applications", json=payload2)
-    assert resp.status_code == 201
-    created2 = resp.get_json()
-    assert created2["status"] == "applied"
-
-    # Create with uppercase status "APPLIED" -> normalized to lowercase
-    payload3 = {"company": "Gamma Inc", "role": "DevOps", "status": "APPLIED"}
-    resp = client.post("/applications", json=payload3)
-    assert resp.status_code == 201
-    created3 = resp.get_json()
-    assert created3["status"] == "applied"
-
-
-def test_get_single_found_and_missing_and_invalid_id(app):
-    client = app.test_client()
-
-    # Create a record
-    resp = client.post(
-        "/applications",
-        json={"company": "Acme", "role": "SWE", "status": "applied"},
-    )
-    assert resp.status_code == 201
     created = resp.get_json()
+    assert created["company"] == "Acme Corp"
+    assert created["role"] == "Backend Engineer"
+    assert created["status"] == "applied"
+    assert "applied_date" in created
     app_id = created["id"]
 
-    # Get by id (found)
-    resp = client.get(f"/applications/{app_id}")
+    # Schema smoke test via list endpoint
+    resp_list = client.get("/applications")
+    assert resp_list.status_code == 200
+    body = resp_list.get_json()
+    assert "items" in body
+    assert isinstance(body["items"], list)
+    assert len(body["items"]) == 1
+    item = body["items"][0]
+    for key in ["id", "company", "role", "status", "applied_date"]:
+        assert key in item
+
+    # GET single
+    resp_single = client.get(f"/applications/{app_id}")
+    assert resp_single.status_code == 200
+    single = resp_single.get_json()
+    for key in ["id", "company", "role", "status", "applied_date"]:
+        assert key in single
+    assert single["id"] == app_id
+
+
+def test_post_validation_missing_company(app_client):
+    client, _, _ = app_client
+
+    payload = {"role": "Developer"}
+    resp = client.post("/applications", json=payload)
+    assert resp.status_code == 400
+    body = resp.get_json()
+    assert "message" in body
+
+
+def test_post_validation_missing_role(app_client):
+    client, _, _ = app_client
+
+    payload = {"company": "Acme"}
+    resp = client.post("/applications", json=payload)
+    assert resp.status_code == 400
+    body = resp.get_json()
+    assert "message" in body
+
+
+def test_status_normalization_on_create(app_client):
+    client, _, _ = app_client
+
+    # Mixed case status values should be accepted and normalized to lowercase
+    payload1 = {"company": "Acme", "role": "Dev", "status": "Applied"}
+    resp1 = client.post("/applications", json=payload1)
+    assert resp1.status_code == 201
+    body1 = resp1.get_json()
+    assert body1["status"] == "applied"
+
+    payload2 = {"company": "Beta", "role": "QA", "status": "APPLIED"}
+    resp2 = client.post("/applications", json=payload2)
+    assert resp2.status_code == 201
+    body2 = resp2.get_json()
+    assert body2["status"] == "applied"
+
+    # Ensure both are retrievable
+    resp_list = client.get("/applications")
+    assert resp_list.status_code == 200
+    items = resp_list.get_json()["items"]
+    assert len(items) == 2
+    assert all(i["status"] == "applied" for i in items)
+
+
+def test_get_list_with_status_filter(app_client):
+    client, _, _ = app_client
+
+    # Seed various statuses
+    client.post("/applications", json={"company": "Acme", "role": "Dev", "status": "Applied"})
+    client.post("/applications", json={"company": "Beta", "role": "QA", "status": "Interviewing"})
+    client.post("/applications", json={"company": "Gamma", "role": "PM", "status": "Offer"})
+    client.post("/applications", json={"company": "Delta", "role": "Ops", "status": "Rejected"})
+
+    # Filter with mixed case query param
+    resp = client.get("/applications?status=InTeRviEwing")
     assert resp.status_code == 200
-    got = resp.get_json()
-    assert got["id"] == app_id
-    assert got["company"] == "Acme"
-    assert got["role"] == "SWE"
-    assert got["status"] == "applied"
-
-    # Get by id (missing)
-    missing_id = str(uuid.uuid4())
-    resp = client.get(f"/applications/{missing_id}")
-    assert resp.status_code == 404
-    err = resp.get_json()
-    assert "message" in err
-
-    # Get by id (invalid UUID)
-    resp = client.get("/applications/not-a-uuid")
-    assert resp.status_code == 400
-    err = resp.get_json()
-    assert "message" in err
+    items = resp.get_json()["items"]
+    assert len(items) == 1
+    assert items[0]["company"] == "Beta"
+    assert items[0]["status"] == "interviewing"
 
 
-def test_post_validation_missing_required_fields(app):
-    client = app.test_client()
+def test_put_update_success_and_status_normalization(app_client):
+    client, _, _ = app_client
 
-    # Missing company
-    resp = client.post("/applications", json={"role": "SWE"})
-    assert resp.status_code == 400
-    err = resp.get_json()
-    assert "message" in err
+    # Create initial
+    create_resp = client.post("/applications", json={"company": "Acme", "role": "Dev"})
+    assert create_resp.status_code == 201
+    app_id = create_resp.get_json()["id"]
 
-    # Missing role
-    resp = client.post("/applications", json={"company": "Acme"})
-    assert resp.status_code == 400
-    err = resp.get_json()
-    assert "message" in err
-
-    # Empty body (treated as {}), triggers required company error
-    resp = client.post("/applications", data="")
-    assert resp.status_code == 400
-    err = resp.get_json()
-    assert "message" in err
-
-
-def test_put_update_success_and_status_normalization(app):
-    client = app.test_client()
-
-    # Create
-    resp = client.post(
-        "/applications",
-        json={"company": "StartCo", "role": "Engineer", "status": "applied"},
-    )
-    assert resp.status_code == 201
-    created = resp.get_json()
-    app_id = created["id"]
-
-    # Update with all fields, mixed-case status, valid date
+    # Update with all fields, status mixed case
     update_payload = {
-        "company": "StartCo International",
-        "role": "Senior Engineer",
-        "status": "InTeRvIeWiNg",
-        "applied_date": "2024-01-02",
+        "company": "Acme Updated",
+        "role": "Senior Dev",
+        "status": "INTERVIEWING",
+        "applied_date": "2023-01-15",
     }
-    resp = client.put(f"/applications/{app_id}", json=update_payload)
-    assert resp.status_code == 200
-    updated = resp.get_json()
-    assert updated["id"] == app_id
-    assert updated["company"] == "StartCo International"
-    assert updated["role"] == "Senior Engineer"
+    put_resp = client.put(f"/applications/{app_id}", json=update_payload)
+    assert put_resp.status_code == 200
+    updated = put_resp.get_json()
+    assert updated["company"] == "Acme Updated"
+    assert updated["role"] == "Senior Dev"
     assert updated["status"] == "interviewing"
-    assert updated["applied_date"] == "2024-01-02"
+    assert updated["applied_date"] == "2023-01-15"
 
-    # Confirm via GET
-    resp = client.get(f"/applications/{app_id}")
-    assert resp.status_code == 200
-    got = resp.get_json()
-    assert got["status"] == "interviewing"
-    assert got["company"] == "StartCo International"
+    # Confirm persisted
+    get_resp = client.get(f"/applications/{app_id}")
+    assert get_resp.status_code == 200
+    got = get_resp.get_json()
+    assert got == updated
 
 
-def test_put_invalid_status_returns_400(app):
-    client = app.test_client()
+def test_put_validation_errors(app_client):
+    client, _, _ = app_client
+
+    # Invalid UUID format
+    resp_invalid_id = client.put("/applications/not-a-uuid", json={"company": "New", "role": "New"})
+    assert resp_invalid_id.status_code == 400
+
+    # Valid UUID but not found
+    some_uuid = str(uuid.uuid4())
+    resp_not_found = client.put(f"/applications/{some_uuid}", json={"company": "New", "role": "New"})
+    assert resp_not_found.status_code == 404
+
+    # Create one to test field validations
+    create_resp = client.post("/applications", json={"company": "Acme", "role": "Dev"})
+    assert create_resp.status_code == 201
+    app_id = create_resp.get_json()["id"]
+
+    # Invalid status
+    resp_bad_status = client.put(f"/applications/{app_id}", json={"status": "unknown"})
+    assert resp_bad_status.status_code == 400
+
+    # Invalid applied_date
+    resp_bad_date = client.put(f"/applications/{app_id}", json={"applied_date": "2024/01/01"})
+    assert resp_bad_date.status_code == 400
+
+    # Empty/whitespace role
+    resp_empty_role = client.put(f"/applications/{app_id}", json={"role": "   "})
+    assert resp_empty_role.status_code == 400
+
+    # Empty/whitespace company
+    resp_empty_company = client.put(f"/applications/{app_id}", json={"company": "   "})
+    assert resp_empty_company.status_code == 400
+
+
+def test_delete_success_and_not_found(app_client):
+    client, _, _ = app_client
 
     # Create
-    resp = client.post(
-        "/applications",
-        json={"company": "BadStatusCo", "role": "Eng", "status": "applied"},
-    )
-    assert resp.status_code == 201
-    created = resp.get_json()
-    app_id = created["id"]
-
-    # Update with invalid status
-    resp = client.put(
-        f"/applications/{app_id}",
-        json={"company": "BadStatusCo", "role": "Eng", "status": "UNKNOWN"},
-    )
-    assert resp.status_code == 400
-    err = resp.get_json()
-    assert "message" in err
-
-
-def test_delete_success_then_missing_and_invalid_id(app):
-    client = app.test_client()
-
-    # Create
-    resp = client.post(
-        "/applications",
-        json={"company": "DeleteCo", "role": "Ops", "status": "applied"},
-    )
-    assert resp.status_code == 201
-    created = resp.get_json()
-    app_id = created["id"]
+    create_resp = client.post("/applications", json={"company": "Acme", "role": "Dev"})
+    assert create_resp.status_code == 201
+    app_id = create_resp.get_json()["id"]
 
     # Delete success
-    resp = client.delete(f"/applications/{app_id}")
-    assert resp.status_code == 204
-    assert resp.data == b""
+    del_resp = client.delete(f"/applications/{app_id}")
+    assert del_resp.status_code == 204
+    assert del_resp.data == b""
 
-    # Subsequent get should be 404
-    resp = client.get(f"/applications/{app_id}")
-    assert resp.status_code == 404
+    # Get after delete -> 404
+    get_resp = client.get(f"/applications/{app_id}")
+    assert get_resp.status_code == 404
 
-    # Delete again should be 404
-    resp = client.delete(f"/applications/{app_id}")
-    assert resp.status_code == 404
+    # Delete again -> 404
+    del_resp2 = client.delete(f"/applications/{app_id}")
+    assert del_resp2.status_code == 404
 
-    # Delete with invalid id should be 400
-    resp = client.delete("/applications/not-a-uuid")
+    # Invalid id -> 400
+    del_bad = client.delete("/applications/not-a-uuid")
+    assert del_bad.status_code == 400
+
+
+def test_get_single_invalid_id_and_not_found(app_client):
+    client, _, _ = app_client
+
+    # Invalid UUID
+    resp_bad = client.get("/applications/12345")
+    assert resp_bad.status_code == 400
+
+    # Valid UUID but not found
+    resp_nf = client.get(f"/applications/{uuid.uuid4()}")
+    assert resp_nf.status_code == 404
+
+
+def test_invalid_json_returns_400(app_client):
+    client, _, _ = app_client
+
+    # Non-empty invalid JSON body
+    resp = client.post("/applications", data="not json", content_type="application/json")
     assert resp.status_code == 400
-    err = resp.get_json()
-    assert "message" in err
-
-
-def test_list_filter_by_status_mixed_case(app):
-    client = app.test_client()
-
-    # Create multiple records with different statuses
-    resp = client.post(
-        "/applications",
-        json={"company": "OfferCo", "role": "Dev", "status": "Offer"},
-    )
-    assert resp.status_code == 201
-    offer = resp.get_json()
-
-    resp = client.post(
-        "/applications",
-        json={"company": "RejectCo", "role": "Dev", "status": "rejected"},
-    )
-    assert resp.status_code == 201
-    rejected = resp.get_json()
-
-    # Filter by status with mixed case
-    resp = client.get("/applications?status=OFFER")
-    assert resp.status_code == 200
-    data = resp.get_json()
-    assert "items" in data
-    assert all(item["status"] == "offer" for item in data["items"])
-    ids = {item["id"] for item in data["items"]}
-    assert offer["id"] in ids
-    assert rejected["id"] not in ids
-
-    resp = client.get("/applications?status=rejected")
-    assert resp.status_code == 200
-    data = resp.get_json()
-    assert "items" in data
-    assert all(item["status"] == "rejected" for item in data["items"])
-    ids = {item["id"] for item in data["items"]}
-    assert rejected["id"] in ids
-    assert offer["id"] not in ids
+    body = resp.get_json()
+    assert "message" in body and body["message"] == "invalid JSON"
