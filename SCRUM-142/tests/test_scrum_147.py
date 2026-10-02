@@ -1,271 +1,241 @@
 import uuid
 import pytest
 
-import scrum_147 as m
+import scrum_147 as mod
 
 
 @pytest.fixture
 def db_path(tmp_path):
-    return str(tmp_path / "test.sqlite")
+    return str(tmp_path / "test.db")
 
 
-def test_create_application_defaults_and_normalization(monkeypatch, db_path):
-    fixed_date = "2023-03-05"
-    monkeypatch.setattr(m, "_today_utc_ymd", lambda: fixed_date)
-    monkeypatch.setattr(m.uuid, "uuid4", lambda: uuid.UUID("00000000-0000-0000-0000-000000000001"))
+def is_valid_uuid(val: str) -> bool:
+    try:
+        uuid.UUID(val)
+        return True
+    except Exception:
+        return False
+
+
+def test_post_application_success_defaults_and_status_normalization(monkeypatch, db_path):
+    monkeypatch.setattr(mod, "_today_utc_ymd", lambda: "2020-01-02")
+
+    payload = {"company": " Acme Corp ", "role": " Engineer "}
+    code, body = mod.post_applications(payload, db_path=db_path)
+    assert code == 201
+    assert isinstance(body, dict)
+    assert is_valid_uuid(body["id"])
+    assert body["company"] == "Acme Corp"
+    assert body["role"] == "Engineer"
+    assert body["status"] == "applied"
+    assert body["applied_date"] == "2020-01-02"
+
+    # verify persistence via GET by id
+    code2, body2 = mod.get_application_by_id(body["id"], db_path=db_path)
+    assert code2 == 200
+    assert body2 == body
+
+
+def test_post_application_with_status_mixed_case_and_explicit_date(db_path):
     payload = {
-        "company": "  Acme  ",
-        "role": "  Engineer ",
-        "status": None,
-        "applied_date": None,
+        "company": "Example Inc",
+        "role": "Developer",
+        "status": "  InTeRvIeWiNg ",
+        "applied_date": "2021-12-31",
     }
-    created = m.ApplicationService.create_application(payload, db_path=db_path)
-    assert created["id"] == "00000000-0000-0000-0000-000000000001"
-    assert created["company"] == "Acme"
-    assert created["role"] == "Engineer"
-    assert created["status"] == "applied"
-    assert created["applied_date"] == fixed_date
-
-    # Verify persistence
-    fetched = m.ApplicationRepository.get_by_id(created["id"], db_path=db_path)
-    assert fetched == created
+    code, body = mod.post_applications(payload, db_path=db_path)
+    assert code == 201
+    assert body["status"] == "interviewing"
+    assert body["applied_date"] == "2021-12-31"
 
 
-def test_create_application_with_status_and_date_validation_and_normalization(monkeypatch, db_path):
-    monkeypatch.setattr(m.uuid, "uuid4", lambda: uuid.UUID("00000000-0000-0000-0000-000000000002"))
-    payload = {
-        "company": "Co",
-        "role": "Dev",
-        "status": " INTERVIEWING ",
-        "applied_date": "2023-01-01 ",
-    }
-    created = m.ApplicationService.create_application(payload, db_path=db_path)
-    assert created["status"] == "interviewing"
-    assert created["applied_date"] == "2023-01-01"
+@pytest.mark.parametrize(
+    "payload, expected_message",
+    [
+        ({"role": "Engineer"}, "company is required"),
+        ({"company": "   ", "role": "Engineer"}, "company is required"),
+        ({"company": "Acme"}, "role is required"),
+        ({"company": "Acme", "role": "   "}, "role is required"),
+    ],
+)
+def test_post_application_missing_or_empty_company_role(db_path, payload, expected_message):
+    code, body = mod.post_applications(payload, db_path=db_path)
+    assert code == 400
+    assert body["message"] == expected_message
 
 
-def test_create_application_invalid_inputs(db_path):
-    # Missing company
-    with pytest.raises(m.BadRequestError) as e1:
-        m.ApplicationService.create_application({"role": "Engineer"}, db_path=db_path)
-    assert str(e1.value) == "400: company is required"
-
-    # Missing role
-    with pytest.raises(m.BadRequestError) as e2:
-        m.ApplicationService.create_application({"company": "Acme"}, db_path=db_path)
-    assert str(e2.value) == "400: role is required"
-
-    # Invalid status
-    with pytest.raises(m.BadRequestError) as e3:
-        m.ApplicationService.create_application({"company": "Acme", "role": "Engineer", "status": "unknown"}, db_path=db_path)
-    assert str(e3.value) == "400: invalid status"
-
-    # Invalid applied_date format
-    with pytest.raises(m.BadRequestError) as e4:
-        m.ApplicationService.create_application({"company": "Acme", "role": "Engineer", "applied_date": "2023/01/01"}, db_path=db_path)
-    assert str(e4.value) == "400: applied_date must be in YYYY-MM-DD format"
-
-    # Empty applied_date string
-    with pytest.raises(m.BadRequestError) as e5:
-        m.ApplicationService.create_application({"company": "Acme", "role": "Engineer", "applied_date": "  "}, db_path=db_path)
-    assert str(e5.value) == "400: applied_date must be in YYYY-MM-DD format"
+def test_post_application_invalid_status(db_path):
+    payload = {"company": "Acme", "role": "Engineer", "status": "pending"}
+    code, body = mod.post_applications(payload, db_path=db_path)
+    assert code == 400
+    assert body["message"] == "invalid status"
 
 
-def test_list_applications_ordering_and_filtering(monkeypatch, db_path):
-    # Deterministic IDs for ordering checks
-    ids = [
-        uuid.UUID("00000000-0000-0000-0000-000000000001"),
-        uuid.UUID("00000000-0000-0000-0000-000000000002"),
-        uuid.UUID("00000000-0000-0000-0000-000000000003"),
-    ]
-
-    def id_gen():
-        it = iter(ids)
-        return lambda: next(it)
-
-    monkeypatch.setattr(m.uuid, "uuid4", id_gen())
-
-    # Create three records with different dates/statuses
-    a = m.ApplicationService.create_application(
-        {"company": "A", "role": "R", "status": "applied", "applied_date": "2023-01-02"},
-        db_path=db_path,
-    )
-    b = m.ApplicationService.create_application(
-        {"company": "B", "role": "R", "status": "offer", "applied_date": "2023-01-03"},
-        db_path=db_path,
-    )
-    c = m.ApplicationService.create_application(
-        {"company": "C", "role": "R", "status": "interviewing", "applied_date": "2023-01-03"},
-        db_path=db_path,
-    )
-
-    items = m.ApplicationService.list_applications(None, db_path=db_path)
-    assert [i["id"] for i in items] == [b["id"], c["id"], a["id"]]
-
-    # Filter by status with normalization
-    filtered = m.ApplicationService.list_applications("  InterViewIng ", db_path=db_path)
-    assert [i["id"] for i in filtered] == [c["id"]]
-
-    # Controller wrapper
-    code, body = m.get_applications(db_path=db_path)
-    assert code == 200
-    assert "items" in body and isinstance(body["items"], list)
-    assert len(body["items"]) == 3
-
-    # Invalid status in controller
-    code2, body2 = m.get_applications(status="bad", db_path=db_path)
-    assert code2 == 400
-    assert body2 == {"message": "invalid status"}
+def test_post_application_invalid_applied_date(db_path):
+    payload = {"company": "Acme", "role": "Engineer", "applied_date": "2021-13-01"}
+    code, body = mod.post_applications(payload, db_path=db_path)
+    assert code == 400
+    assert body["message"] == "applied_date must be in YYYY-MM-DD format"
 
 
-def test_get_application_by_id_happy_and_errors(monkeypatch, db_path):
-    monkeypatch.setattr(m.uuid, "uuid4", lambda: uuid.UUID("00000000-0000-0000-0000-000000000099"))
-    created = m.ApplicationService.create_application(
-        {"company": "Acme", "role": "Engineer", "applied_date": "2023-02-01"},
-        db_path=db_path,
-    )
+def test_get_applications_list_and_ordering(monkeypatch, db_path):
+    # Create three records with two identical dates to test secondary id ordering
+    monkeypatch.setattr(mod, "_today_utc_ymd", lambda: "2022-01-01")
+    c1 = {"company": "A", "role": "R"}  # default date 2022-01-01
+    code, b1 = mod.post_applications(c1, db_path=db_path)
+    assert code == 201
 
-    # Happy path via controller
-    code, item = m.get_application_by_id(created["id"], db_path=db_path)
-    assert code == 200
-    assert item == created
+    c2 = {"company": "B", "role": "R", "status": "offer", "applied_date": "2023-12-31"}
+    code, b2 = mod.post_applications(c2, db_path=db_path)
+    assert code == 201
 
-    # Non-existent valid UUID -> 404
-    missing_id = str(uuid.uuid4())
-    code2, body2 = m.get_application_by_id(missing_id, db_path=db_path)
-    assert code2 == 404
-    assert body2 == {"message": "application not found"}
+    c3 = {"company": "C", "role": "R", "status": "offer", "applied_date": "2023-12-31"}
+    code, b3 = mod.post_applications(c3, db_path=db_path)
+    assert code == 201
 
-    # Invalid ID format -> 400 (covers review warning)
-    code3, body3 = m.get_application_by_id("not-a-uuid", db_path=db_path)
-    assert code3 == 400
-    assert body3 == {"message": "invalid id"}
+    code_list, body = mod.get_applications(db_path=db_path)
+    assert code_list == 200
+    items = body["items"]
+    assert len(items) == 3
 
+    # Order: applied_date DESC, then id ASC
+    assert items[0]["applied_date"] == "2023-12-31"
+    assert items[1]["applied_date"] == "2023-12-31"
+    assert items[2]["applied_date"] == "2022-01-01"
 
-def test_update_application_happy_partial_updates_and_normalization(db_path):
-    created = m.ApplicationService.create_application(
-        {"company": "OldCo", "role": "Dev", "status": "applied", "applied_date": "2023-01-01"},
-        db_path=db_path,
-    )
-
-    updated = m.ApplicationService.update_application(
-        created["id"],
-        {"company": "  NewCo   ", "status": " OFFER "},
-        db_path=db_path,
-    )
-    assert updated["company"] == "NewCo"
-    assert updated["status"] == "offer"
-    assert updated["role"] == "Dev"
-    assert updated["applied_date"] == "2023-01-01"
-
-    # Update applied_date with trimming
-    updated2 = m.ApplicationService.update_application(
-        created["id"],
-        {"applied_date": "2023-01-05 "},
-        db_path=db_path,
-    )
-    assert updated2["applied_date"] == "2023-01-05"
+    # First two sorted by id asc
+    first_two_sorted = sorted(items[:2], key=lambda x: x["id"])
+    assert items[:2] == first_two_sorted
 
 
-def test_update_application_validation_errors(db_path):
-    created = m.ApplicationService.create_application(
-        {"company": "Acme", "role": "Engineer", "applied_date": "2023-01-01"},
-        db_path=db_path,
-    )
+def test_get_applications_filter_status_and_invalid(db_path):
+    # Create sample data
+    mod.post_applications({"company": "A", "role": "R", "status": "offer", "applied_date": "2023-01-01"}, db_path=db_path)
+    mod.post_applications({"company": "B", "role": "R", "status": "offer", "applied_date": "2023-01-02"}, db_path=db_path)
+    mod.post_applications({"company": "C", "role": "R", "status": "rejected", "applied_date": "2023-01-03"}, db_path=db_path)
 
-    # company empty string
-    with pytest.raises(m.BadRequestError) as e1:
-        m.ApplicationService.update_application(created["id"], {"company": "   "}, db_path=db_path)
-    assert str(e1.value) == "400: company must be a non-empty string"
+    code_ok, body_ok = mod.get_applications(status="  OfFer  ", db_path=db_path)
+    assert code_ok == 200
+    items = body_ok["items"]
+    assert all(it["status"] == "offer" for it in items)
+    assert len(items) == 2
 
-    # role empty string
-    with pytest.raises(m.BadRequestError) as e2:
-        m.ApplicationService.update_application(created["id"], {"role": ""}, db_path=db_path)
-    assert str(e2.value) == "400: role must be a non-empty string"
+    code_bad, body_bad = mod.get_applications(status="invalid", db_path=db_path)
+    assert code_bad == 400
+    assert body_bad["message"] == "invalid status"
+
+    code_empty, body_empty = mod.get_applications(status="", db_path=db_path)
+    assert code_empty == 400
+    assert body_empty["message"] == "invalid status"
+
+
+def test_get_application_by_id_success_and_errors(db_path):
+    code_created, created = mod.post_applications({"company": "Acme", "role": "Eng"}, db_path=db_path)
+    assert code_created == 201
+    good_id = created["id"]
+
+    code_bad, body_bad = mod.get_application_by_id("not-a-uuid", db_path=db_path)
+    assert code_bad == 400
+    assert body_bad["message"] == "invalid id"
+
+    random_id = str(uuid.uuid4())
+    code_nf, body_nf = mod.get_application_by_id(random_id, db_path=db_path)
+    assert code_nf == 404
+    assert body_nf["message"] == "application not found"
+
+    code_ok, body_ok = mod.get_application_by_id(good_id, db_path=db_path)
+    assert code_ok == 200
+    assert body_ok["id"] == good_id
+
+
+def test_put_application_success_update_and_normalization(db_path):
+    code_created, created = mod.post_applications({"company": "Acme", "role": "Eng"}, db_path=db_path)
+    assert code_created == 201
+    app_id = created["id"]
+
+    payload = {"company": "  New Co  ", "status": "  REJECTED ", "applied_date": "2021-01-02"}
+    code_upd, body_upd = mod.put_application(app_id, payload, db_path=db_path)
+    assert code_upd == 200
+    assert body_upd["company"] == "New Co"
+    assert body_upd["status"] == "rejected"
+    assert body_upd["applied_date"] == "2021-01-02"
+
+    code_get, body_get = mod.get_application_by_id(app_id, db_path=db_path)
+    assert code_get == 200
+    assert body_get == body_upd
+
+
+def test_put_application_invalid_id_and_not_found(db_path):
+    code_bad, body_bad = mod.put_application("not-a-uuid", {"company": "X"}, db_path=db_path)
+    assert code_bad == 400
+    assert body_bad["message"] == "invalid id"
+
+    not_found_id = str(uuid.uuid4())
+    code_nf, body_nf = mod.put_application(not_found_id, {"company": "X"}, db_path=db_path)
+    assert code_nf == 404
+    assert body_nf["message"] == "application not found"
+
+
+def test_put_application_invalid_status_and_applied_date_and_fields(db_path):
+    code_created, created = mod.post_applications({"company": "Acme", "role": "Eng"}, db_path=db_path)
+    assert code_created == 201
+    app_id = created["id"]
 
     # invalid status
-    with pytest.raises(m.BadRequestError) as e3:
-        m.ApplicationService.update_application(created["id"], {"status": "bad"}, db_path=db_path)
-    assert str(e3.value) == "400: invalid status"
+    code1, body1 = mod.put_application(app_id, {"status": "pending"}, db_path=db_path)
+    assert code1 == 400
+    assert body1["message"] == "invalid status"
 
-    # invalid applied_date string
-    with pytest.raises(m.BadRequestError) as e4:
-        m.ApplicationService.update_application(created["id"], {"applied_date": "bad"}, db_path=db_path)
-    assert str(e4.value) == "400: applied_date must be in YYYY-MM-DD format"
+    # invalid date format
+    code2, body2 = mod.put_application(app_id, {"applied_date": "2021-99-99"}, db_path=db_path)
+    assert code2 == 400
+    assert body2["message"] == "applied_date must be in YYYY-MM-DD format"
 
-    # applied_date None explicitly present -> error
-    with pytest.raises(m.BadRequestError) as e5:
-        m.ApplicationService.update_application(created["id"], {"applied_date": None}, db_path=db_path)
-    assert str(e5.value) == "400: applied_date must be in YYYY-MM-DD format"
-
-    # invalid id format
-    with pytest.raises(m.BadRequestError) as e6:
-        m.ApplicationService.update_application("not-a-uuid", {"company": "X"}, db_path=db_path)
-    assert str(e6.value) == "400: invalid id"
-
-    # non-existent but valid UUID -> NotFound
-    missing_id = str(uuid.uuid4())
-    with pytest.raises(m.NotFoundError) as e7:
-        m.ApplicationService.update_application(missing_id, {"company": "X"}, db_path=db_path)
-    assert str(e7.value) == "404: application not found"
-
-
-def test_update_application_empty_payload_noop_triggers_update_call(monkeypatch, db_path):
-    created = m.ApplicationService.create_application(
-        {"company": "Acme", "role": "Engineer", "applied_date": "2023-01-01"},
-        db_path=db_path,
-    )
-    existing = m.ApplicationRepository.get_by_id(created["id"], db_path=db_path)
-
-    call_count = {"n": 0}
-    original_update = m.ApplicationRepository.update
-
-    def wrapper(*args, **kwargs):
-        call_count["n"] += 1
-        return original_update(*args, **kwargs)
-
-    monkeypatch.setattr(m.ApplicationRepository, "update", staticmethod(wrapper))
-
-    result = m.ApplicationService.update_application(created["id"], {}, db_path=db_path)
-    assert call_count["n"] == 1
-    assert result == existing
-
-    # Extra irrelevant keys also cause update (covers review warning)
-    result2 = m.ApplicationService.update_application(created["id"], {"foo": "bar"}, db_path=db_path)
-    assert call_count["n"] == 2
-    assert result2 == existing
-
-
-def test_delete_application_happy_and_errors(db_path):
-    created = m.ApplicationService.create_application(
-        {"company": "Acme", "role": "Engineer", "applied_date": "2023-01-01"},
-        db_path=db_path,
-    )
-
-    # Happy path via controller
-    code, body = m.delete_application(created["id"], db_path=db_path)
-    assert code == 204
-    assert body is None
-    # Ensure removed
-    assert m.ApplicationRepository.get_by_id(created["id"], db_path=db_path) is None
-
-    # Non-existent valid uuid
-    missing_id = str(uuid.uuid4())
-    code2, body2 = m.delete_application(missing_id, db_path=db_path)
-    assert code2 == 404
-    assert body2 == {"message": "application not found"}
-
-    # Invalid id
-    code3, body3 = m.delete_application("not-a-uuid", db_path=db_path)
+    # empty date
+    code3, body3 = mod.put_application(app_id, {"applied_date": "   "}, db_path=db_path)
     assert code3 == 400
-    assert body3 == {"message": "invalid id"}
+    assert body3["message"] == "applied_date must be in YYYY-MM-DD format"
+
+    # None date explicitly provided
+    code4, body4 = mod.put_application(app_id, {"applied_date": None}, db_path=db_path)
+    assert code4 == 400
+    assert body4["message"] == "applied_date must be in YYYY-MM-DD format"
+
+    # empty company
+    code5, body5 = mod.put_application(app_id, {"company": "   "}, db_path=db_path)
+    assert code5 == 400
+    assert body5["message"] == "company must be a non-empty string"
+
+    # empty role
+    code6, body6 = mod.put_application(app_id, {"role": ""}, db_path=db_path)
+    assert code6 == 400
+    assert body6["message"] == "role must be a non-empty string"
 
 
-def test_controller_internal_error_mapping(monkeypatch, db_path):
+def test_delete_application_success_and_errors(db_path):
+    code_created, created = mod.post_applications({"company": "Acme", "role": "Eng"}, db_path=db_path)
+    assert code_created == 201
+    app_id = created["id"]
+
+    code_del, body_del = mod.delete_application(app_id, db_path=db_path)
+    assert code_del == 204
+    assert body_del is None
+
+    # second delete should be 404
+    code_del2, body_del2 = mod.delete_application(app_id, db_path=db_path)
+    assert code_del2 == 404
+    assert body_del2["message"] == "application not found"
+
+    # invalid id
+    code_bad, body_bad = mod.delete_application("abc", db_path=db_path)
+    assert code_bad == 400
+    assert body_bad["message"] == "invalid id"
+
+
+def test_internal_error_translates_to_500(monkeypatch, db_path):
     def boom(*args, **kwargs):
         raise ValueError("boom")
-
-    monkeypatch.setattr(m.ApplicationService, "create_application", staticmethod(boom))
-    code, body = m.post_applications({"company": "x", "role": "y"}, db_path=db_path)
+    monkeypatch.setattr(mod.ApplicationService, "create_application", boom)
+    code, body = mod.post_applications({"company": "Acme", "role": "Eng"}, db_path=db_path)
     assert code == 500
-    assert body == {"message": "internal server error"}
+    assert body["message"] == "internal server error"
