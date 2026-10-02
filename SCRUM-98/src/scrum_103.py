@@ -19,7 +19,7 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass, asdict
 from datetime import date, datetime
-from typing import Iterable, List, Optional, Dict, Any, Tuple
+from typing import Iterable, List, Optional, Dict, Any, Tuple, Set
 
 
 # Status constants
@@ -28,6 +28,20 @@ STATUS_INTERVIEWING = "interviewing"
 STATUS_OFFER = "offer"
 STATUS_REJECTED = "rejected"
 VALID_STATUSES = {STATUS_APPLIED, STATUS_INTERVIEWING, STATUS_OFFER, STATUS_REJECTED}
+
+# Allowed order-by mapping for safety
+ALLOWED_ORDER_COLUMNS: Dict[str, str] = {
+    "id": "id",
+    "company": "company",
+    "role": "role",
+    "status": "status",
+    "applied_date": "applied_date",
+    "created_at": "created_at",
+    "updated_at": "updated_at",
+}
+
+# Track initialized databases to avoid running schema DDL on every connection
+_initialized_dbs: Set[str] = set()
 
 
 # Exceptions
@@ -135,7 +149,9 @@ def validate_application_fields(
 def _connect(db_path: str) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
-    _ensure_schema(conn)
+    if db_path not in _initialized_dbs:
+        _ensure_schema(conn)
+        _initialized_dbs.add(db_path)
     return conn
 
 
@@ -158,6 +174,8 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         """
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_applications_applied_date ON applications(applied_date);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_applications_status_applied_date ON applications(status, applied_date);")
     conn.commit()
 
 
@@ -182,13 +200,12 @@ def list_applications(
     Return all applications, ordered by the specified column (default applied_date desc).
     Allowed order_by values: id, company, role, status, applied_date, created_at, updated_at.
     """
-    allowed = {"id", "company", "role", "status", "applied_date", "created_at", "updated_at"}
-    ob = order_by if order_by in allowed else "applied_date"
+    ob_col = ALLOWED_ORDER_COLUMNS.get(order_by, "applied_date")
     direction = "DESC" if descending else "ASC"
 
     with _connect(db_path) as conn:
         rows = conn.execute(
-            f"SELECT id, company, role, status, applied_date, notes FROM applications ORDER BY {ob} {direction}, id DESC"
+            f"SELECT id, company, role, status, applied_date, notes FROM applications ORDER BY {ob_col} {direction}, id DESC"
         ).fetchall()
     return [_row_to_application(r) for r in rows]
 
@@ -252,7 +269,7 @@ def update_application(
     role: Optional[str] = None,
     status: Optional[str] = None,
     applied_date: Optional[str] = None,
-    notes: Optional[Optional[str]] = None,
+    notes: Optional[str] = None,
     db_path: str = "demo.db",
 ) -> Application:
     """
@@ -279,8 +296,6 @@ def update_application(
         set_parts.append("status = ?")
         params.append(s_status)
     if applied_date is not None:
-        if s_applied_date is None or not _is_valid_iso_date(s_applied_date):
-            raise ValidationError("applied_date must be in YYYY-MM-DD format.")
         set_parts.append("applied_date = ?")
         params.append(s_applied_date)
     if notes is not None:
