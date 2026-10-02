@@ -180,6 +180,9 @@ def create_application(payload: Mapping[str, Any], db_path: str = "demo.db") -> 
     """
     init_db(db_path)
 
+    if not isinstance(payload, Mapping):
+        raise BadRequestError("Invalid input.", [{"field": "body", "error": "Must be a JSON object."}])
+
     errors: List[ErrorDetail] = []
 
     company = _validate_non_empty_string(payload.get("company"), "company", required=True, errors=errors)
@@ -283,6 +286,9 @@ def update_application(app_id: int, updates: Mapping[str, Any], db_path: str = "
         if existing is None:
             raise NotFoundError("Application not found.")
 
+        if not isinstance(updates, Mapping):
+            raise BadRequestError("Invalid input.", [{"field": "body", "error": "Must be a JSON object."}])
+
         errors: List[ErrorDetail] = []
 
         payload: Dict[str, Any] = {}
@@ -308,9 +314,9 @@ def update_application(app_id: int, updates: Mapping[str, Any], db_path: str = "
                 payload["applied_date"] = applied_date
 
         if "notes" in updates:
+            before = len(errors)
             notes = _validate_notes(updates.get("notes"), "notes", errors=errors)
-            # notes can be None, we store as None
-            if "notes" in updates:
+            if len(errors) == before:
                 payload["notes"] = notes
 
         # If no allowed fields provided, simply return the existing record
