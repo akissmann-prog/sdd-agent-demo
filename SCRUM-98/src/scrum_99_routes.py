@@ -13,7 +13,7 @@ from scrum_99 import (
 bp = Blueprint('scrum_99', __name__)
 
 
-@bp.before_app_first_request
+@bp.before_app_request
 def _ensure_db():
     """
     Ensure the database is initialized before handling the first request.
